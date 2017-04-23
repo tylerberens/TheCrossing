@@ -40,8 +40,8 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
     [DisplayName( "Weekly Statistics" )]
     [Category( "com_bricksandmortarstudio > Crossing" )]
     [Description( "Dashboard to keep track of volunteers." )]
-    [MetricCategoriesField( "MetricCategories", "The metrics in these metric categories will be displayed as 'Areas', with 'Headcount' listed as the subarea." )]
-    [GroupsField( "Groups", "The groups listed here will be displayed as 'Areas', with their child groups being listed as the subareas'" )]
+    [MetricCategoriesField( "Metric Categories", "The metrics in these metric categories will be displayed as 'Areas', with 'Headcount' listed as the subarea.", false )]
+    [GroupsField( "Groups", "The groups listed here will be displayed as 'Areas', with their child groups being listed as the subareas'", false )]
     public partial class WeeklyStatistics : Rock.Web.UI.RockBlock
     {
         #region Fields
@@ -126,12 +126,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
             BindGrids();
         }
 
-        /// <summary>
-        /// Handles the SelectedDateRangeChanged event of the drpSlidingDateRange control.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
-        protected void drpSlidingDateRange_SelectedDateRangeChanged( object sender, EventArgs e )
+        protected void dpWeek_TextChanged( object sender, EventArgs e )
         {
             BindGrids();
         }
@@ -147,9 +142,9 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
         {
             DateTime pickerDate = dpWeek.SelectedDate.Value;
             var endDate = pickerDate.SundayDate();
-            var startDate = endDate.AddDays( -1 );
+            var startDate = endDate.AddDays( -6 );
             var lastYearEndDate = endDate.AddDays( -( 52 * 7 ) );
-            var lastYearStartDate = lastYearEndDate.AddDays( -1 );
+            var lastYearStartDate = lastYearEndDate.AddDays( -6 );
 
             List<StatisticRow> thisYearDataSource = GetDataForDateRange( startDate, endDate.AddDays( 1 ) );
             List<StatisticRow> lastYearDataSource = GetDataForDateRange( lastYearStartDate, lastYearEndDate.AddDays( 1 ) );
@@ -174,16 +169,16 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
             {
                 if ( lastYearStartDate.Month == lastYearEndDate.Month )
                 {
-                    lThisYearDate.Text = String.Format( "{0} {1}/{2}, {3}", lastYearStartDate.ToString( "MMM" ), lastYearStartDate.Day, lastYearEndDate.Day, lastYearStartDate.ToString( "yyyy" ) );
+                    lLastYearDate.Text = String.Format( "{0} {1}/{2}, {3}", lastYearStartDate.ToString( "MMM" ), lastYearStartDate.Day, lastYearEndDate.Day, lastYearStartDate.ToString( "yyyy" ) );
                 }
                 else
                 {
-                    lThisYearDate.Text = String.Format( "{0} {1} - {2} {3}, {4}", lastYearStartDate.ToString( "MMM" ), lastYearStartDate.Day, lastYearEndDate.ToString( "MMM" ), lastYearEndDate.Day, lastYearStartDate.ToString( "yyyy" ) );
+                    lLastYearDate.Text = String.Format( "{0} {1} - {2} {3}, {4}", lastYearStartDate.ToString( "MMM" ), lastYearStartDate.Day, lastYearEndDate.ToString( "MMM" ), lastYearEndDate.Day, lastYearStartDate.ToString( "yyyy" ) );
                 }
             }
             else
             {
-                lThisYearDate.Text = String.Format( "{0} {1}, {3} - {4} {5}, {6}", lastYearStartDate.ToString( "MMM" ), lastYearStartDate.Day, lastYearStartDate.ToString( "yyyy" ), lastYearEndDate.ToString( "MMM" ), lastYearEndDate.Day, lastYearEndDate.ToString( "yyyy" ) );
+                lLastYearDate.Text = String.Format( "{0} {1}, {3} - {4} {5}, {6}", lastYearStartDate.ToString( "MMM" ), lastYearStartDate.Day, lastYearStartDate.ToString( "yyyy" ), lastYearEndDate.ToString( "MMM" ), lastYearEndDate.Day, lastYearEndDate.ToString( "yyyy" ) );
             }
 
             StringBuilder sb = new StringBuilder();
@@ -219,7 +214,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
             lLastYearNote.Text = sb.ToString();
 
             gThisYear.DataSource = thisYearDataSource
-                .OrderBy( sr => lastYearDataSource.Select( ly => ly.RowId ).Contains( sr.RowId ) )
+                .OrderByDescending( sr => lastYearDataSource.Select( ly => ly.RowId ).Contains( sr.RowId ) )
                 .ThenBy( sr => sr.SortValue )
                 .ThenBy( sr => sr.Area )
                 .ThenBy( sr => sr.Subarea )
@@ -229,7 +224,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
             gThisYear.DataBind();
 
             gLastYear.DataSource = lastYearDataSource
-                .OrderBy( sr => thisYearDataSource.Select( ty => ty.RowId ).Contains( sr.RowId ) )
+                .OrderByDescending( sr => thisYearDataSource.Select( ly => ly.RowId ).Contains( sr.RowId ) )
                 .ThenBy( sr => sr.SortValue )
                 .ThenBy( sr => sr.Area )
                 .ThenBy( sr => sr.Subarea )
@@ -259,7 +254,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
             var groups = groupService.GetByGuids( groupGuidList );
             var metrics = metricCategoryService.GetByGuids( metricCategoryGuidList ).Select( mc => mc.Metric ).Distinct().ToList();
 
-            var datasource = new List<StatisticRow>();
+            var datasource = new List<StatisticRow>().AsEnumerable();
 
             foreach ( var metric in metrics )
             {
@@ -278,6 +273,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                      Area = metric.Title,
                      Subarea = "HeadCount",
                      Service = scheduleService.Get( mv.Key ).Name,
+                     iCalendarContent = scheduleService.Get( mv.Key ).iCalendarContent,
                      Count = mv.Sum( a => a.YValue ).HasValue ? Int32.Parse( mv.Sum( a => a.YValue ).Value.ToString() ) : 0,
                      Volunteers = 0,
                      Total = mv.Sum( a => a.YValue ).HasValue ? Int32.Parse( mv.Sum( a => a.YValue ).Value.ToString() ) : 0,
@@ -286,7 +282,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
 
                 if ( metricData.Any() )
                 {
-                    metricData.Concat( new List<StatisticRow>{ new StatisticRow
+                    var subTotalRow = metricData.Concat( new List<StatisticRow>{ new StatisticRow
                     {
                         RowId = metric.Id.ToString(),
                         SortValue = 0,
@@ -297,22 +293,63 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                         Count = metricData.Sum(mv => mv.Count),
                         Volunteers = metricData.Sum(mv => mv.Volunteers),
                         Total = metricData.Sum(mv => mv.Total)
-                    } } );
+                    } }.AsQueryable() );
 
-                    datasource.Concat( metricData );
+                    datasource = datasource.Concat( subTotalRow );
                 }
 
             }
 
             foreach ( var group in groups )
             {
+                if ( !group.Groups.Any() )
+                {
+                    var childDescendantGroupIds = groupService.GetAllDescendents( group.Id ).Select( g => g.Id ).ToList();
+                    var childGroupData = attendanceService.Queryable().Where( a =>
+                        a.StartDateTime >= startDate &&
+                        a.StartDateTime <= endDate &&
+                         a.GroupId == group.Id )
+                    .GroupBy( a => a.ScheduleId )
+                      .Select( a => new StatisticRow
+                      {
+                          RowId = group.Id + "-" + a.Key,
+                          SortValue = 1,
+                          IsTotal = false,
+                          Area = group.Name,
+                          Subarea = group.Name,
+                          Service = a.FirstOrDefault().Schedule.Name,
+                          iCalendarContent = a.FirstOrDefault().Schedule.iCalendarContent,
+                          Count = a.Count(),
+                          Volunteers = 0,
+                          Total = a.Count()
+                      } );
+
+                    if ( childGroupData.Any() )
+                    {
+                        var subTotalRow = childGroupData.ToList().Concat( new List<StatisticRow>{ new StatisticRow
+                        {
+                            RowId = group.Id.ToString(),
+                            SortValue = 1,
+                            IsTotal = true,
+                            Area = group.Name,
+                            Subarea = group.Name,
+                            Service = "Sub-Total",
+                            Count = childGroupData.Sum(cg => cg.Count),
+                            Volunteers = childGroupData.Sum(cg => cg.Volunteers),
+                            Total = childGroupData.Sum(cg => cg.Total)
+                        } } );
+
+                        datasource = datasource.Concat( subTotalRow );
+                    }
+                }
+
                 foreach ( var childGroup in group.Groups )
                 {
                     var childDescendantGroupIds = groupService.GetAllDescendents( childGroup.Id ).Select( g => g.Id ).ToList();
                     var childGroupData = attendanceService.Queryable().Where( a =>
                         a.GroupId.HasValue &&
-                        a.CreatedDateTime >= startDate &&
-                        a.CreatedDateTime <= endDate &&
+                        a.StartDateTime >= startDate &&
+                        a.StartDateTime <= endDate &&
                         ( a.GroupId == childGroup.Id ||
                             childDescendantGroupIds.Contains( a.GroupId.Value ) ) )
                         .GroupBy( a => a.ScheduleId )
@@ -323,7 +360,8 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                             IsTotal = false,
                             Area = group.Name,
                             Subarea = childGroup.Name,
-                            Service = a.First().Schedule.Name,
+                            Service = a.FirstOrDefault().Schedule.Name,
+                            iCalendarContent = a.FirstOrDefault().Schedule.iCalendarContent,
                             Count = a.Count(),
                             Volunteers = 0,
                             Total = a.Count()
@@ -331,10 +369,10 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
 
                     if ( childGroupData.Any() )
                     {
-                        childGroupData.Concat( new List<StatisticRow>{ new StatisticRow
+                        var subTotalRow = childGroupData.ToList().Concat( new List<StatisticRow>{ new StatisticRow
                         {
                             RowId = childGroup.Id.ToString(),
-                            SortValue = 0,
+                            SortValue = 1,
                             IsTotal = true,
                             Area = group.Name,
                             Subarea = childGroup.Name,
@@ -342,15 +380,15 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                             Count = childGroupData.Sum(cg => cg.Count),
                             Volunteers = childGroupData.Sum(cg => cg.Volunteers),
                             Total = childGroupData.Sum(cg => cg.Total)
-                        } } );
+                        } }.AsQueryable() );
 
-                        datasource.Concat( childGroupData );
+                        datasource = datasource.Concat( subTotalRow );
                     }
 
                 }
             }
 
-            datasource.Concat( new List<StatisticRow>{ new StatisticRow
+            datasource = datasource.Concat( new List<StatisticRow>{ new StatisticRow
                 {
                     RowId = "Total",
                     SortValue = 2,
@@ -361,8 +399,9 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                     Count = datasource.Where(ds=> ds.IsTotal).Sum(cg => cg.Count),
                     Volunteers = datasource.Where(ds=> ds.IsTotal).Sum(cg => cg.Volunteers),
                     Total = datasource.Where(ds=> ds.IsTotal).Sum(cg => cg.Total)
-                } } );
-            return datasource;
+                } }.AsQueryable() );
+
+            return datasource.ToList();
         }
 
         #endregion
@@ -382,6 +421,8 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
             public String Subarea { get; set; }
 
             public String Service { get; set; }
+
+            public String iCalendarContent { get; set; }
 
             public int Count { get; set; }
 
