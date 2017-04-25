@@ -40,7 +40,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
     [DisplayName( "Weekly Statistics" )]
     [Category( "com_bricksandmortarstudio > Crossing" )]
     [Description( "Dashboard to keep track of volunteers." )]
-    [MetricCategoriesField( "Metric Categories", "The metrics in these metric categories will be displayed as 'Areas', with 'Headcount' listed as the subarea.", false )]
+    [MetricCategoriesField( "Metrics", "The metrics listed here will be displayed as 'Areas', with 'Headcount' listed as the subarea.", false )]
     [GroupsField( "Groups", "The groups listed here will be displayed as 'Areas', with their child groups being listed as the subareas'", false )]
     public partial class WeeklyStatistics : Rock.Web.UI.RockBlock
     {
@@ -182,16 +182,20 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
             }
 
             StringBuilder sb = new StringBuilder();
-            var noteList = thisYearDataSource.Max( sr => sr.MetricNote ).SplitDelimitedValues();
+            var noteList = thisYearDataSource.Max( sr => sr.MetricNote ).SplitDelimitedValues( false );
             for ( int i = 0; i < noteList.Count(); i++ )
             {
                 if ( i % 2 == 0 )
                 {
+                    if ( i != 0 )
+                    {
+                        sb.Append( ", " );
+                    }
                     sb.AppendFormat( "<b> {0}:</b>", noteList[i] );
                 }
                 else
                 {
-                    sb.AppendFormat( ", {0}", noteList[i] );
+                    sb.AppendFormat( " {0}", noteList[i] );
                 }
             }
 
@@ -242,17 +246,17 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
             var entityTypeScheduleGuid = Rock.SystemGuid.EntityType.SCHEDULE.AsGuid();
 
             RockContext rockContext = new RockContext();
-            MetricCategoryService metricCategoryService = new MetricCategoryService( rockContext );
+            MetricService metricService = new MetricService( rockContext );
             MetricValueService metricValueService = new MetricValueService( rockContext );
             ScheduleService scheduleService = new ScheduleService( rockContext );
             GroupService groupService = new GroupService( rockContext );
             AttendanceService attendanceService = new AttendanceService( rockContext );
 
-            var metricCategoryGuidList = GetAttributeValue( "MetricCategories" ).SplitDelimitedValues().AsGuidList();
+            var metricCategoryGuidList = GetAttributeValue( "Metrics" ).SplitDelimitedValues().AsGuidList();
             var groupGuidList = GetAttributeValue( "Groups" ).SplitDelimitedValues().AsGuidList();
 
             var groups = groupService.GetByGuids( groupGuidList );
-            var metrics = metricCategoryService.GetByGuids( metricCategoryGuidList ).Select( mc => mc.Metric ).Distinct().ToList();
+            var metrics = metricService.GetByGuids( metricCategoryGuidList ).Distinct().ToList();
 
             var datasource = new List<StatisticRow>().AsEnumerable();
 
@@ -265,6 +269,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                     mv.MetricValuePartitions.Where( mvp => mvp.MetricPartition.EntityType.Guid == entityTypeScheduleGuid ).FirstOrDefault().EntityId.HasValue
                     )
                  .GroupBy( mv => mv.MetricValuePartitions.Where( mvp => mvp.MetricPartition.EntityType.Guid == entityTypeScheduleGuid ).FirstOrDefault().EntityId.Value )
+                 .ToList()
                  .Select( mv => new StatisticRow
                  {
                      RowId = metric.Id + "-" + mv.Key,
@@ -274,9 +279,9 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                      Subarea = "HeadCount",
                      Service = scheduleService.Get( mv.Key ).Name,
                      iCalendarContent = scheduleService.Get( mv.Key ).iCalendarContent,
-                     Count = mv.Sum( a => a.YValue ).HasValue ? Int32.Parse( mv.Sum( a => a.YValue ).Value.ToString() ) : 0,
+                     Count = mv.Sum( a => a.YValue ).HasValue ? decimal.ToInt32( mv.Sum( a => a.YValue ).Value ) : 0,
                      Volunteers = 0,
-                     Total = mv.Sum( a => a.YValue ).HasValue ? Int32.Parse( mv.Sum( a => a.YValue ).Value.ToString() ) : 0,
+                     Total = mv.Sum( a => a.YValue ).HasValue ? decimal.ToInt32( mv.Sum( a => a.YValue ).Value ) : 0,
                      MetricNote = mv.Max( a => a.Note )
                  } );
 
