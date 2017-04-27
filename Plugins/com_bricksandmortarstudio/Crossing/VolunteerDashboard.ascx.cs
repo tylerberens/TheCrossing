@@ -29,6 +29,9 @@ using Rock.Web.Cache;
 using Rock.Web.UI.Controls;
 using Rock.Attribute;
 
+using com.bricksandmortarstudio.TheCrossing.Model;
+using com.bricksandmortarstudio.TheCrossing.Data;
+
 namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
 {
     /// <summary>
@@ -38,6 +41,10 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
     [Category( "com_bricksandmortarstudio > Crossing" )]
     [Description( "Dashboard to keep track of volunteers." )]
     [GroupTypeField( "Serving Group Type", "The Group Type to display in the grid", true, Rock.SystemGuid.GroupType.GROUPTYPE_SERVING_TEAM )]
+    [TextField( "Director Attribute Key", "The key for the Director group attribute" )]
+    [TextField( "Volunteer Goal Attribute Key", "The key for the Volunteer Goal group attribute" )]
+    [TextField( "Leader Goal Attribute Key", "The key for the Leader Goal group attribute" )]
+
     public partial class VolunteerDashboard : Rock.Web.UI.RockBlock
     {
         #region Fields
@@ -64,6 +71,9 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
         {
             base.OnInit( e );
             gList.GridRebind += gList_GridRebind;
+            gVolunteers.GridRebind += gVolunteers_GridRebind;
+            gLeaders.GridRebind += gLeaders_GridRebind;
+            gUniques.GridRebind += gUniques_GridRebind;
 
             // this event gets fired after block settings are updated. it's nice to repaint the screen if these settings would alter it
             this.BlockUpdated += Block_BlockUpdated;
@@ -110,15 +120,26 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
             BindGrid();
         }
 
-        /// <summary>
-        /// Handles the SelectedDateRangeChanged event of the drpSlidingDateRange control.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
-        protected void drpSlidingDateRange_SelectedDateRangeChanged( object sender, EventArgs e )
+        private void gVolunteers_GridRebind( object sender, EventArgs e )
         {
             BindGrid();
         }
+
+        private void gLeaders_GridRebind( object sender, EventArgs e )
+        {
+            BindGrid();
+        }
+
+        private void gUniques_GridRebind( object sender, EventArgs e )
+        {
+            BindGrid();
+        }
+
+        protected void dp_TextChanged( object sender, EventArgs e )
+        {
+            BindGrid();
+        }
+
         #endregion
 
         #region Methods
@@ -133,98 +154,216 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
 
             RockContext rockContext = new RockContext();
             PersonService personService = new PersonService( rockContext );
-            HistoryService historyService = new HistoryService( rockContext );
             GroupService groupService = new GroupService( rockContext );
             GroupTypeService groupTypeService = new GroupTypeService( rockContext );
+            VolunteerMembershipService volunteerMembershipService = new VolunteerMembershipService( new VolunteerTrackingContext() );
 
             var servingTeamGroupTypeGuid = GetAttributeValue( "ServingGroupType" ).AsGuidOrNull();
             if ( servingTeamGroupTypeGuid.HasValue )
             {
-                var servingTeamChildGroups = groupTypeService.GetChildGroupTypes( servingTeamGroupTypeGuid.Value );
+                var servingTeamChildGroupTypes = groupTypeService.GetChildGroupTypes( servingTeamGroupTypeGuid.Value );
 
-                var servingGroups = groupService.Queryable().Where( g => servingTeamChildGroups.Select( gt => gt.Id ).Contains( g.GroupTypeId ) ).ToList();
-                var servingGroupIds = servingGroups.Select( g => g.Id ).ToList();
+                var servingGroupQry = groupService.Queryable().Where( g => servingTeamChildGroupTypes.Select( gt => gt.Id ).Contains( g.GroupTypeId ) );
 
-                var joinHistory = historyService.Queryable().Where( h =>
-                    h.EntityType.Guid == entityTypePersonGuid &&
-                    h.Summary == "Added to group." &&
-                    h.RelatedEntityTypeId.HasValue &&
-                     h.RelatedEntityType.Guid == entityTypeGroupGuid &&
-                     h.RelatedEntityId.HasValue &&
-                     servingGroupIds.Contains( h.RelatedEntityId.Value )
-                     ).Select( h => new
-                     {
-                         PersonId = h.EntityId,
-                         GroupId = h.RelatedEntityId,
-                         JoinDate = h.CreatedDateTime
-                     } )
-                     .GroupBy( h => new
-                     {
-                         PersonId = h.PersonId,
-                         GroupId = h.GroupId
-                     } );
+                var servingGroupIds = servingGroupQry.Select( g => g.Id ).ToList();
 
-                var leaveHistory = historyService.Queryable().Where( h =>
-                    h.EntityType.Guid == entityTypePersonGuid &&
-                    h.Summary == "Removed from group." &&
-                    h.RelatedEntityTypeId.HasValue &&
-                     h.RelatedEntityType.Guid == entityTypeGroupGuid &&
-                     h.RelatedEntityId.HasValue &&
-                     servingGroupIds.Contains( h.RelatedEntityId.Value )
-                     ).Select( h => new
-                     {
-                         PersonId = h.EntityId,
-                         GroupId = h.RelatedEntityId,
-                         LeaveDate = h.CreatedDateTime
-                     } )
-                     .GroupBy( h => new
-                     {
-                         PersonId = h.PersonId,
-                         GroupId = h.GroupId
-                     } );
+                var servingGroups = new List<GroupSummary>();
 
-                var personGroupHistory = joinHistory.Join( leaveHistory, j => j.Key, l => l.Key, ( j, l ) => new
+                foreach ( var servingGroup in servingGroupQry.ToList() )
                 {
-                    PersonId = j.Key.PersonId,
-                    GroupId = j.Key.GroupId,
-                    JoinDates = j.Select( h => h.JoinDate ),
-                    LeaveDates = l.Select( h => h.LeaveDate )
+                    servingGroup.LoadAttributes();
+                    servingGroups.Add( new GroupSummary
+                    {
+                        GroupId = servingGroup.Id,
+                        ParentGroupId = servingGroup.ParentGroupId,
+                        GroupName = servingGroup.Name,
+                        ParentGroupName = servingGroup.ParentGroupId != null ? servingGroup.ParentGroup.Name : string.Empty,
+                        Director = servingGroup.GetAttributeValue( GetAttributeValue( "DirectorAttributeKey" ) ),
+                        VolunteerGoal = servingGroup.GetAttributeValue( GetAttributeValue( "VolunteerGoalAttributeKey" ) ).AsIntegerOrNull(),
+                        LeaderGoal = servingGroup.GetAttributeValue( GetAttributeValue( "LeaderGoalAttributeKey" ) ).AsIntegerOrNull()
+                    } );
+                }
+
+                var volunteerQry = volunteerMembershipService.Queryable().Where( vm => servingGroupIds.Contains( vm.GroupId ) );
+
+                var volunteerSummary = volunteerQry.Select( vm => new
+                {
+                    GroupId = vm.GroupId,
+                    Volunteer = vm
+                } )
+                .GroupBy( vm => vm.GroupId )
+                .Select( vmg => new
+                {
+                    GroupId = vmg.Key,
+                    Volunteers = vmg.Select( v => v.Volunteer ).ToList()
                 } );
 
-                DateRange dateRange = SlidingDateRangePicker.CalculateDateRangeFromDelimitedValues( drpSlidingDateRange.DelimitedValues );
-                if ( dateRange.Start == null )
+                var servingGroupSummary = from g in servingGroups
+                                          join vmg in volunteerSummary
+                                          on g.GroupId equals vmg.GroupId into joinResult
+                                          from x in joinResult.DefaultIfEmpty( new { GroupId = g.GroupId, Volunteers = new List<VolunteerMembership>() } )
+                                          select new
+                                          {
+                                              Group = g,
+                                              Volunteers = x.Volunteers
+                                          };
+
+                DateRange dateRange = new DateRange( dpStart.SelectedDate, dpEnd.SelectedDate );
+                if ( dpStart.SelectedDate == null )
                 {
                     dateRange.Start = RockDateTime.Now;
                 }
 
-                if ( dateRange.End == null )
+                if ( dpStart.SelectedDate == null )
                 {
                     dateRange.End = RockDateTime.Now;
                 }
 
                 IEnumerable<DateRange> dateRangeList = SplitDateRangeIntoWeeks( dateRange );
 
-                var gridSource = servingGroups.SelectMany( g => dateRangeList, ( g, d ) => new
+                var gListSource = servingGroupSummary.SelectMany( g => dateRangeList, ( g, d ) => new
                 {
-                    Ministry = g.ParentGroup != null ? g.ParentGroup.Name : g.Name,
-                    Director = "",
-                    DateRange = d.Start.Value.ToShortDateString() + " " + d.End.Value.ToShortDateString(),
-                    StartingVolunteers = personGroupHistory.Where( h => h.GroupId == g.Id && h.JoinDates.Any( jd => jd < d.Start ) && !h.LeaveDates.Any( ld => ld >= h.JoinDates.Where( jd => jd < d.Start ).OrderByDescending( jd => jd ).FirstOrDefault() ) ).DistinctBy( h => h.PersonId ).Count(),
-                    NewVolunteers = personGroupHistory.Where( h => h.GroupId == g.Id && h.JoinDates.Where( jd => jd >= d.Start && jd <= d.End ).Count() > h.LeaveDates.Where( ld => ld >= d.Start && ld <= d.End ).Count() ).DistinctBy( h => h.PersonId ).Count(),
-                    LostVolunteers = personGroupHistory.Where( h => h.GroupId == g.Id && h.JoinDates.Where( jd => jd >= d.Start && jd <= d.End ).Count() < h.LeaveDates.Where( ld => ld >= d.Start && ld <= d.End ).Count() ).DistinctBy( h => h.PersonId ).Count(),
-                    TotalVolunteers = personGroupHistory.Where( h => h.GroupId == g.Id && h.JoinDates.Any( jd => jd <= d.End ) && !h.LeaveDates.Any( ld => ld >= h.JoinDates.Where( jd => jd <= d.End ).OrderByDescending( jd => jd ).FirstOrDefault() ) ).DistinctBy( h => h.PersonId ).Count(),
-                    VolunteerGoal = "",
-                    VolunteerPercent = "",
-                    StartingLeaders = personGroupHistory.Where( h => h.GroupId == g.Id && h.JoinDates.Any( jd => jd < d.Start ) && !h.LeaveDates.Any( ld => ld >= h.JoinDates.Where( jd => jd < d.Start ).OrderByDescending( jd => jd ).FirstOrDefault() ) ).DistinctBy( h => h.PersonId ).Count(),
-                    NewLeaders = personGroupHistory.Where( h => h.GroupId == g.Id && h.JoinDates.Where( jd => jd >= d.Start && jd <= d.End ).Count() > h.LeaveDates.Where( ld => ld >= d.Start && ld <= d.End ).Count() ).DistinctBy( h => h.PersonId ).Count(),
-                    LostLeaders = personGroupHistory.Where( h => h.GroupId == g.Id && h.JoinDates.Where( jd => jd >= d.Start && jd <= d.End ).Count() < h.LeaveDates.Where( ld => ld >= d.Start && ld <= d.End ).Count() ).DistinctBy( h => h.PersonId ).Count(),
-                    TotalLeaders = personGroupHistory.Where( h => h.GroupId == g.Id && h.JoinDates.Any( jd => jd <= d.End ) && !h.LeaveDates.Any( ld => ld >= h.JoinDates.Where( jd => jd <= d.End ).OrderByDescending( jd => jd ).FirstOrDefault() ) ).DistinctBy( h => h.PersonId ).Count(),
-                    LeaderGoal = "",
-                    LeaderPercent = ""
+                    Ministry = g.Group.ParentGroupId != null ? g.Group.ParentGroupName : g.Group.GroupName,
+                    Director = g.Group.Director,
+                    DateRange = d.Start.Value.ToShortDateString() + " - " + d.End.Value.ToShortDateString(),
+                    StartingVolunteers = g.Volunteers.Where( vm => !vm.GroupRole.IsLeader &&
+                                                                ( !vm.LeftGroupDateTime.HasValue || vm.LeftGroupDateTime > d.Start.Value ) &&
+                                                                vm.JoinedGroupDateTime < d.Start.Value )
+                                                    .DistinctBy( vm => vm.PersonId )
+                                                    .Count(),
+                    NewVolunteers = g.Volunteers.Where( vm => !vm.GroupRole.IsLeader &&
+                                                            ( !vm.LeftGroupDateTime.HasValue || vm.LeftGroupDateTime > d.End.Value ) &&
+                                                            ( vm.JoinedGroupDateTime >= d.Start.Value && vm.JoinedGroupDateTime < d.End.Value ) )
+                                                .DistinctBy( vm => vm.PersonId ).Count(),
+                    LostVolunteers = g.Volunteers.Where( vm => !vm.GroupRole.IsLeader )
+                                                .GroupBy( vm => vm.PersonId )
+                                                .Where( vmg => vmg.Where( v => v.LeftGroupDateTime >= d.Start.Value && v.LeftGroupDateTime < d.End.Value ).Count() > vmg.Where( v => v.JoinedGroupDateTime >= d.Start.Value && v.JoinedGroupDateTime < d.End.Value ).Count() )
+                                                .Count(),
+                    TotalVolunteers = g.Volunteers.Where( vm => !vm.GroupRole.IsLeader &&
+                                                                ( !vm.LeftGroupDateTime.HasValue || vm.LeftGroupDateTime > d.End.Value ) &&
+                                                                vm.JoinedGroupDateTime < d.End.Value )
+                                                    .DistinctBy( vm => vm.PersonId )
+                                                    .Count(),
+                    VolunteerGoal = g.Group.VolunteerGoal ?? null,
+                    VolunteerPercent = g.Group.VolunteerGoal != null ? g.Volunteers.Where( vm => !vm.GroupRole.IsLeader &&
+                                                                ( !vm.LeftGroupDateTime.HasValue || vm.LeftGroupDateTime > d.End.Value ) &&
+                                                                vm.JoinedGroupDateTime < d.End.Value )
+                                                    .DistinctBy( vm => vm.PersonId )
+                                                    .Count() / g.Group.VolunteerGoal : null,
+                    StartingLeaders = g.Volunteers.Where( vm => vm.GroupRole.IsLeader &&
+                                                                ( !vm.LeftGroupDateTime.HasValue || vm.LeftGroupDateTime > d.Start.Value ) &&
+                                                                vm.JoinedGroupDateTime < d.Start.Value )
+                                                    .DistinctBy( vm => vm.PersonId )
+                                                    .Count(),
+                    NewLeaders = g.Volunteers.Where( vm => vm.GroupRole.IsLeader &&
+                                                            ( !vm.LeftGroupDateTime.HasValue || vm.LeftGroupDateTime > d.End.Value ) &&
+                                                            ( vm.JoinedGroupDateTime >= d.Start.Value && vm.JoinedGroupDateTime < d.End.Value ) )
+                                                .DistinctBy( vm => vm.PersonId ).Count(),
+                    LostLeaders = g.Volunteers.Where( vm => vm.GroupRole.IsLeader )
+                                                .GroupBy( vm => vm.PersonId )
+                                                .Where( vmg => vmg.Where( v => v.LeftGroupDateTime >= d.Start.Value && v.LeftGroupDateTime < d.End.Value ).Count() > vmg.Where( v => v.JoinedGroupDateTime >= d.Start.Value && v.JoinedGroupDateTime < d.End.Value ).Count() )
+                                                .Count(),
+                    TotalLeaders = g.Volunteers.Where( vm => vm.GroupRole.IsLeader &&
+                                                                ( !vm.LeftGroupDateTime.HasValue || vm.LeftGroupDateTime > d.End.Value ) &&
+                                                                vm.JoinedGroupDateTime < d.End.Value )
+                                                    .DistinctBy( vm => vm.PersonId )
+                                                    .Count(),
+                    LeaderGoal = g.Group.LeaderGoal ?? null,
+                    LeaderPercent = g.Group.LeaderGoal != null ? g.Volunteers.Where( vm => vm.GroupRole.IsLeader &&
+                                                                ( !vm.LeftGroupDateTime.HasValue || vm.LeftGroupDateTime > d.End.Value ) &&
+                                                                vm.JoinedGroupDateTime < d.End.Value )
+                                                    .DistinctBy( vm => vm.PersonId )
+                                                    .Count() / g.Group.LeaderGoal : null
                 } ).ToList();
 
-                gList.DataSource = gridSource.ToList();
+                gList.DataSource = gListSource.ToList();
                 gList.DataBind();
+
+
+                var gVolunteersSource = new[] { new {
+                    StartingVolunteers = volunteerQry.Where( vm => !vm.GroupRole.IsLeader &&
+                                                                ( !vm.LeftGroupDateTime.HasValue || vm.LeftGroupDateTime > dateRange.Start.Value ) &&
+                                                                vm.JoinedGroupDateTime < dateRange.Start.Value )
+                                                    .DistinctBy( vm => vm.PersonId )
+                                                    .Count(),
+                    NewVolunteers = volunteerQry.Where( vm => !vm.GroupRole.IsLeader &&
+                                                            ( !vm.LeftGroupDateTime.HasValue || vm.LeftGroupDateTime > dateRange.End.Value ) &&
+                                                            ( vm.JoinedGroupDateTime >= dateRange.Start.Value && vm.JoinedGroupDateTime < dateRange.End.Value ) )
+                                                .DistinctBy( vm => vm.PersonId ).Count(),
+                    LostVolunteers = volunteerQry.Where( vm => !vm.GroupRole.IsLeader )
+                                                .GroupBy( vm => vm.PersonId )
+                                                .Where( vmg => vmg.Where( v => v.LeftGroupDateTime >= dateRange.Start.Value && v.LeftGroupDateTime < dateRange.End.Value ).Count() > vmg.Where( v => v.JoinedGroupDateTime >= dateRange.Start.Value && v.JoinedGroupDateTime < dateRange.End.Value ).Count() )
+                                                .Count(),
+                    TotalVolunteers = volunteerQry.Where( vm => !vm.GroupRole.IsLeader &&
+                                                                ( !vm.LeftGroupDateTime.HasValue || vm.LeftGroupDateTime > dateRange.End.Value ) &&
+                                                                vm.JoinedGroupDateTime < dateRange.End.Value )
+                                                    .DistinctBy( vm => vm.PersonId )
+                                                    .Count(),
+                    VolunteerGoal = servingGroups.Sum(g=> g.VolunteerGoal ) ?? null,
+                    VolunteerPercent = servingGroups.Sum(g=> g.VolunteerGoal ) > 0 ? volunteerQry.Where( vm => !vm.GroupRole.IsLeader &&
+                                                                ( !vm.LeftGroupDateTime.HasValue || vm.LeftGroupDateTime > dateRange.End.Value ) &&
+                                                                vm.JoinedGroupDateTime < dateRange.End.Value )
+                                                    .DistinctBy( vm => vm.PersonId )
+                                                    .Count() /servingGroups.Sum(g=> g.VolunteerGoal ) : null,
+
+                } };
+
+                gVolunteers.DataSource = gVolunteersSource.ToList();
+                gVolunteers.DataBind();
+                gVolunteers.ShowFooter = false;
+
+                var gLeadersSource = new[] { new {
+                    StartingLeaders = volunteerQry.Where( vm => vm.GroupRole.IsLeader &&
+                                                                ( !vm.LeftGroupDateTime.HasValue || vm.LeftGroupDateTime > dateRange.Start.Value ) &&
+                                                                vm.JoinedGroupDateTime < dateRange.Start.Value )
+                                                    .DistinctBy( vm => vm.PersonId )
+                                                    .Count(),
+                    NewLeaders = volunteerQry.Where( vm => vm.GroupRole.IsLeader &&
+                                                            ( !vm.LeftGroupDateTime.HasValue || vm.LeftGroupDateTime > dateRange.End.Value ) &&
+                                                            ( vm.JoinedGroupDateTime >= dateRange.Start.Value && vm.JoinedGroupDateTime < dateRange.End.Value ) )
+                                                .DistinctBy( vm => vm.PersonId ).Count(),
+                    LostLeaders = volunteerQry.Where( vm => vm.GroupRole.IsLeader )
+                                                .GroupBy( vm => vm.PersonId )
+                                                .Where( vmg => vmg.Where( v => v.LeftGroupDateTime >= dateRange.Start.Value && v.LeftGroupDateTime < dateRange.End.Value ).Count() > vmg.Where( v => v.JoinedGroupDateTime >= dateRange.Start.Value && v.JoinedGroupDateTime < dateRange.End.Value ).Count() )
+                                                .Count(),
+                    TotalLeaders = volunteerQry.Where( vm => vm.GroupRole.IsLeader &&
+                                                                ( !vm.LeftGroupDateTime.HasValue || vm.LeftGroupDateTime > dateRange.End.Value ) &&
+                                                                vm.JoinedGroupDateTime < dateRange.End.Value )
+                                                    .DistinctBy( vm => vm.PersonId )
+                                                    .Count(),
+                    LeaderGoal = servingGroups.Sum(g=> g.LeaderGoal ) ?? null,
+                    LeaderPercent = servingGroups.Sum(g=> g.LeaderGoal ) > 0 ? volunteerQry.Where( vm => vm.GroupRole.IsLeader &&
+                                                                ( !vm.LeftGroupDateTime.HasValue || vm.LeftGroupDateTime > dateRange.End.Value ) &&
+                                                                vm.JoinedGroupDateTime < dateRange.End.Value )
+                                                    .DistinctBy( vm => vm.PersonId )
+                                                    .Count() /servingGroups.Sum(g=> g.LeaderGoal ) : null,
+
+                } };
+
+                gLeaders.DataSource = gLeadersSource.ToList();
+                gLeaders.DataBind();
+
+                var gUniquesSource = new[] { new {
+                    UniqueVolunteers = volunteerQry.Where( vm => !vm.GroupRole.IsLeader &&
+                                                                ( !vm.LeftGroupDateTime.HasValue || vm.LeftGroupDateTime > dateRange.End.Value ) &&
+                                                                vm.JoinedGroupDateTime < dateRange.End.Value )
+                                                    .DistinctBy( vm => vm.PersonId )
+                                                    .Count(),
+                    UniqueLeaders = volunteerQry.Where( vm => vm.GroupRole.IsLeader &&
+                                                                ( !vm.LeftGroupDateTime.HasValue || vm.LeftGroupDateTime > dateRange.End.Value ) &&
+                                                                vm.JoinedGroupDateTime < dateRange.End.Value )
+                                                    .DistinctBy( vm => vm.PersonId )
+                                                    .Count(),
+                    UniqueTotal = volunteerQry.Where( vm =>
+                                                        ( !vm.LeftGroupDateTime.HasValue || vm.LeftGroupDateTime > dateRange.End.Value ) &&
+                                                         vm.JoinedGroupDateTime < dateRange.End.Value )
+                                                    .DistinctBy( vm => vm.PersonId )
+                                                    .Count()
+
+                } };
+
+                gUniques.DataSource = gUniquesSource.ToList();
+                gUniques.DataBind();
             }
         }
 
@@ -233,7 +372,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
             DateTime rangeEnd;
             while ( ( rangeEnd = dateRange.Start.Value.AddDays( 7 ) ) < dateRange.End.Value )
             {
-                yield return new DateRange( dateRange.Start, rangeEnd );
+                yield return new DateRange( dateRange.Start, rangeEnd.AddDays( 1 ).AddMilliseconds( -2 ) );
                 dateRange.Start = rangeEnd;
             }
             yield return new DateRange( dateRange.Start, dateRange.End );
@@ -241,5 +380,26 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
 
         #endregion
 
+
+        #region Helper Classes
+
+        public class GroupSummary
+        {
+            public int GroupId { get; set; }
+
+            public int? ParentGroupId { get; set; }
+
+            public String ParentGroupName { get; set; }
+
+            public String GroupName { get; set; }
+
+            public String Director { get; set; }
+
+            public int? VolunteerGoal { get; set; }
+
+            public int? LeaderGoal { get; set; }
+        }
+
+        #endregion
     }
 }

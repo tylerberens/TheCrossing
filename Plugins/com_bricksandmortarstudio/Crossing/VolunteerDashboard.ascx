@@ -6,12 +6,65 @@
         <asp:Panel ID="pnlView" runat="server" CssClass="panel panel-block">
 
             <div class="panel-heading">
-                <h1 class="panel-title"><i class="fa fa-star"></i>Blank List Block</h1>
+                <h1 class="panel-title">Serving Dashboard</h1>
             </div>
             <div class="panel-body">
-                <Rock:SlidingDateRangePicker ID="drpSlidingDateRange" runat="server" Label="Sunday Date Range"
-                    EnabledSlidingDateRangeTypes="DateRange" OnSelectedDateRangeChanged="drpSlidingDateRange_SelectedDateRangeChanged"/>
+                <div class="row">
+                    <div class="col-md-1">
+                        <Rock:DatePicker ID="dpStart" runat="server" OnTextChanged="dp_TextChanged" AutoPostBack="true" Label="Start" />
+                    </div>
+                    <div class="col-md-1">
+                        <Rock:DatePicker ID="dpEnd" runat="server" OnTextChanged="dp_TextChanged" AutoPostBack="true" Label="End" />
+                    </div>
+                    <div class="col-md-10">
+                        <div class="row">
+                            <div class="col-md-3 col-md-offset-1">
+                                <h4>Volunteers</h4>
+                                <div class="grid grid-panel">
+                                    <Rock:Grid ID="gVolunteers" runat="server" AllowSorting="true" ShowFooter="false" DisplayType="Light">
+                                        <Columns>
+                                            <Rock:RockBoundField DataField="StartingVolunteers" HeaderText="Begin" SortExpression="StartingVolunteers" />
+                                            <Rock:RockBoundField DataField="NewVolunteers" HeaderText="New" SortExpression="NewVolunteers" />
+                                            <Rock:RockBoundField DataField="LostVolunteers" HeaderText="Lost" SortExpression="LostVolunteers" />
+                                            <Rock:RockBoundField DataField="TotalVolunteers" HeaderText="End" SortExpression="TotalVolunteers" />
+                                            <Rock:RockBoundField DataField="VolunteerGoal" HeaderText="Goal" SortExpression="VolunteerGoal" />
+                                            <Rock:RockBoundField DataField="VolunteerPercent" HeaderText="Goal %" SortExpression="VolunteerPercent" />
+                                        </Columns>
+                                    </Rock:Grid>
+                                </div>
+                            </div>
+                            <div class="col-md-3 col-md-offset-1">
+                                <h4>Leaders</h4>
+                                <div class="grid grid-panel">
+                                    <Rock:Grid ID="gLeaders" runat="server" AllowSorting="true" ShowFooter="false" DisplayType="Light">
+                                        <Columns>
+                                            <Rock:RockBoundField DataField="StartingLeaders" HeaderText="Begin" SortExpression="StartingLeaders" />
+                                            <Rock:RockBoundField DataField="NewLeaders" HeaderText="New " SortExpression="NewLeaders" />
+                                            <Rock:RockBoundField DataField="LostLeaders" HeaderText="Lost" SortExpression="LostLeaders" />
+                                            <Rock:RockBoundField DataField="TotalLeaders" HeaderText="End" SortExpression="TotalLeaders" />
+                                            <Rock:RockBoundField DataField="LeaderGoal" HeaderText="Goal" SortExpression="LeaderGoal" />
+                                            <Rock:RockBoundField DataField="LeaderPercent" HeaderText="Goal %" SortExpression="LeaderPercent" />
+                                        </Columns>
+                                    </Rock:Grid>
+                                </div>
+                            </div>
+                            <div class="col-md-2 col-md-offset-1">
+                                <div class="grid grid-panel">
+                                    <h4>Uniques</h4>
+                                    <Rock:Grid ID="gUniques" runat="server" AllowSorting="true" ShowFooter="false" DisplayType="Light">
+                                        <Columns>
+                                            <Rock:RockBoundField DataField="UniqueVolunteers" HeaderText="Volunteers" SortExpression="Ministry" />
+                                            <Rock:RockBoundField DataField="UniqueLeaders" HeaderText="Leaders" SortExpression="Director" />
+                                            <Rock:RockBoundField DataField="UniqueTotal" HeaderText="Total" SortExpression="DateRange" />
+                                        </Columns>
+                                    </Rock:Grid>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
+                </div>
+                </br></br>
                 <div class="grid grid-panel">
                     <Rock:Grid ID="gList" runat="server" AllowSorting="true">
                         <Columns>

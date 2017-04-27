@@ -41,7 +41,9 @@
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.ComponentModel.Composition" />
+    <Reference Include="System.ComponentModel.DataAnnotations" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.Web" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
@@ -52,7 +54,12 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Attribute\GroupsFieldAttribute.cs" />
+    <Compile Include="Data\VolunteerTrackingContext.cs" />
+    <Compile Include="Data\VolunteerTrackingService.cs" />
     <Compile Include="Field\Types\GroupsFieldType.cs" />
+    <Compile Include="Migrations\001_VolunteerTracking.cs" />
+    <Compile Include="Model\VolunteerMembership.cs" />
+    <Compile Include="Model\VolunteerMembershipService.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="VolunteerAttendance\Jobs\PrepopulateVolunteerAttendance.cs" />
   </ItemGroup>
