@@ -41,7 +41,9 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
     [Category( "com_bricksandmortarstudio > Crossing" )]
     [Description( "Dashboard to keep track of volunteers." )]
     [MetricCategoriesField( "Metrics", "The metrics listed here will be displayed as 'Areas', with 'Headcount' listed as the subarea.", false )]
-    [GroupsField( "Groups", "The groups listed here will be displayed as 'Areas', with their child groups being listed as the subareas'", false )]
+    [GroupsField( "Attendance Groups", "The groups listed here will be displayed as 'Areas', with their child groups being listed as the subareas'", false )]
+    [TextField( "Volunteer Group Attribute Key", "The key for the group attribute that ties attendance and volunteer teams together", false )]
+    [GroupsField( "Service Volunteer Groups", "Attendance in the groups listed here and their child groups will be used towards the volunteer count for metric attendance", false )]
     public partial class WeeklyStatistics : Rock.Web.UI.RockBlock
     {
         #region Fields
@@ -134,6 +136,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
         #endregion
 
         #region Methods
+
 
         /// <summary>
         /// Binds the grid.
@@ -253,12 +256,27 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
             AttendanceService attendanceService = new AttendanceService( rockContext );
 
             var metricCategoryGuidList = GetAttributeValue( "Metrics" ).SplitDelimitedValues().AsGuidList();
-            var groupGuidList = GetAttributeValue( "Groups" ).SplitDelimitedValues().AsGuidList();
+            var attendanceGroupGuidList = GetAttributeValue( "AttendanceGroups" ).SplitDelimitedValues().AsGuidList();
+            var parentMetricVolunteerGroupGuids = GetAttributeValue( "ServiceVolunteerGroups" ).SplitDelimitedValues().AsGuidList();
 
-            var groups = groupService.GetByGuids( groupGuidList );
+            var attendanceGroups = groupService.GetByGuids( attendanceGroupGuidList );
+            var parentMetricVolunteerGroups = groupService.GetByGuids( parentMetricVolunteerGroupGuids );
             var metrics = metricService.GetByGuids( metricCategoryGuidList ).Distinct().ToList();
 
             var datasource = new List<StatisticRow>().AsEnumerable();
+
+            var metricVolunteerGroups = new List<Group>();
+            foreach ( var parentMetricVolunteerGroup in parentMetricVolunteerGroups )
+            {
+                metricVolunteerGroups.Add( parentMetricVolunteerGroup );
+                metricVolunteerGroups.AddRange( groupService.GetAllDescendents( parentMetricVolunteerGroup.Id ) );
+            }
+
+            var metricVolunteerGroupIds = metricVolunteerGroups.Select( g => g.Id ).ToList();
+
+            var metricVolunteerAttendanceData = attendanceService.Queryable().Where( a =>
+                                a.GroupId.HasValue &&
+                                metricVolunteerGroupIds.Contains( a.GroupId.Value ) ).ToList();
 
             foreach ( var metric in metrics )
             {
@@ -280,8 +298,10 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                      Service = scheduleService.Get( mv.Key ).Name,
                      iCalendarContent = scheduleService.Get( mv.Key ).iCalendarContent,
                      Count = mv.Sum( a => a.YValue ).HasValue ? decimal.ToInt32( mv.Sum( a => a.YValue ).Value ) : 0,
-                     Volunteers = 0,
-                     Total = mv.Sum( a => a.YValue ).HasValue ? decimal.ToInt32( mv.Sum( a => a.YValue ).Value ) : 0,
+                     Volunteers = metricVolunteerAttendanceData.Where( b =>
+                                 GetScheduleDateRanges( scheduleService.Get( mv.Key ), startDate, endDate ).Any( s => b.StartDateTime >= s.Start && b.StartDateTime <= s.End ) ).Count(),
+                     Total = ( mv.Sum( a => a.YValue ).HasValue ? decimal.ToInt32( mv.Sum( a => a.YValue ).Value ) : 0 ) + ( metricVolunteerAttendanceData.Where( b =>
+                                      GetScheduleDateRanges( scheduleService.Get( mv.Key ), startDate, endDate ).Any( s => b.StartDateTime >= s.Start && b.StartDateTime <= s.End ) ).Count() ),
                      MetricNote = mv.Max( a => a.Note )
                  } );
 
@@ -305,82 +325,48 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
 
             }
 
-            foreach ( var group in groups )
+            foreach ( var attendanceGroup in attendanceGroups )
             {
-                if ( !group.Groups.Any() )
+                foreach ( var attendanceChildGroup in attendanceGroup.Groups )
                 {
-                    var childDescendantGroupIds = groupService.GetAllDescendents( group.Id ).Select( g => g.Id ).ToList();
-                    var childGroupData = attendanceService.Queryable().Where( a =>
-                        a.StartDateTime >= startDate &&
-                        a.StartDateTime <= endDate &&
-                         a.GroupId == group.Id )
-                    .GroupBy( a => a.ScheduleId )
-                      .Select( a => new StatisticRow
-                      {
-                          RowId = group.Id + "-" + a.Key,
-                          SortValue = 1,
-                          IsTotal = false,
-                          Area = group.Name,
-                          Subarea = group.Name,
-                          Service = a.FirstOrDefault().Schedule.Name,
-                          iCalendarContent = a.FirstOrDefault().Schedule.iCalendarContent,
-                          Count = a.Count(),
-                          Volunteers = 0,
-                          Total = a.Count()
-                      } );
+                    attendanceChildGroup.LoadAttributes();
+                    var attendanceChildDescendantGroupIds = groupService.GetAllDescendents( attendanceChildGroup.Id ).Select( g => g.Id ).ToList();
+                    var volunteerGroupGuid = attendanceChildGroup.GetAttributeValue( GetAttributeValue( "VolunteerGroupAttributeKey" ) ).AsGuidOrNull();
+                    var volunteerGroupData = volunteerGroupGuid != null ? attendanceService.Queryable().Where( b =>
+                                b.Group.Guid == volunteerGroupGuid.Value ) : null;
 
-                    if ( childGroupData.Any() )
-                    {
-                        var subTotalRow = childGroupData.ToList().Concat( new List<StatisticRow>{ new StatisticRow
-                        {
-                            RowId = group.Id.ToString(),
-                            SortValue = 1,
-                            IsTotal = true,
-                            Area = group.Name,
-                            Subarea = group.Name,
-                            Service = "Sub-Total",
-                            Count = childGroupData.Sum(cg => cg.Count),
-                            Volunteers = childGroupData.Sum(cg => cg.Volunteers),
-                            Total = childGroupData.Sum(cg => cg.Total)
-                        } } );
-
-                        datasource = datasource.Concat( subTotalRow );
-                    }
-                }
-
-                foreach ( var childGroup in group.Groups )
-                {
-                    var childDescendantGroupIds = groupService.GetAllDescendents( childGroup.Id ).Select( g => g.Id ).ToList();
                     var childGroupData = attendanceService.Queryable().Where( a =>
                         a.GroupId.HasValue &&
                         a.StartDateTime >= startDate &&
                         a.StartDateTime <= endDate &&
-                        ( a.GroupId == childGroup.Id ||
-                            childDescendantGroupIds.Contains( a.GroupId.Value ) ) )
+                        ( a.GroupId == attendanceChildGroup.Id ||
+                            attendanceChildDescendantGroupIds.Contains( a.GroupId.Value ) ) )
                         .GroupBy( a => a.ScheduleId )
                         .Select( a => new StatisticRow
                         {
-                            RowId = childGroup.Id + "-" + a.Key,
+                            RowId = attendanceChildGroup.Id + "-" + a.Key,
                             SortValue = 1,
                             IsTotal = false,
-                            Area = group.Name,
-                            Subarea = childGroup.Name,
+                            Area = attendanceGroup.Name,
+                            Subarea = attendanceChildGroup.Name,
                             Service = a.FirstOrDefault().Schedule.Name,
                             iCalendarContent = a.FirstOrDefault().Schedule.iCalendarContent,
                             Count = a.Count(),
-                            Volunteers = 0,
-                            Total = a.Count()
+                            Volunteers = volunteerGroupGuid != null ? volunteerGroupData.Where( b =>
+                                 GetScheduleDateRanges( a.FirstOrDefault().Schedule, startDate, endDate ).Any( s => b.StartDateTime >= s.Start && b.StartDateTime <= s.End ) ).Count() : 0,
+                            Total = a.Count() + ( volunteerGroupGuid != null ? volunteerGroupData.Where( b =>
+                                  GetScheduleDateRanges( a.FirstOrDefault().Schedule, startDate, endDate ).Any( s => b.StartDateTime >= s.Start && b.StartDateTime <= s.End ) ).Count() : 0 )
                         } );
 
                     if ( childGroupData.Any() )
                     {
                         var subTotalRow = childGroupData.ToList().Concat( new List<StatisticRow>{ new StatisticRow
                         {
-                            RowId = childGroup.Id.ToString(),
+                            RowId = attendanceChildGroup.Id.ToString(),
                             SortValue = 1,
                             IsTotal = true,
-                            Area = group.Name,
-                            Subarea = childGroup.Name,
+                            Area = attendanceGroup.Name,
+                            Subarea = attendanceChildGroup.Name,
                             Service = "Sub-Total",
                             Count = childGroupData.Sum(cg => cg.Count),
                             Volunteers = childGroupData.Sum(cg => cg.Volunteers),
@@ -407,6 +393,41 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                 } }.AsQueryable() );
 
             return datasource.ToList();
+        }
+
+        public virtual List<DateRange> GetScheduleDateRanges( Schedule schedule, DateTime beginDateTime, DateTime endDateTime )
+        {
+            if ( schedule != null )
+            {
+                var result = new List<DateRange>();
+
+                DDay.iCal.Event calEvent = schedule.GetCalenderEvent();
+                if ( calEvent != null && calEvent.DTStart != null )
+                {
+                    var occurrences = ScheduleICalHelper.GetOccurrences( calEvent, beginDateTime, endDateTime );
+                    result = occurrences
+                        .Where( a =>
+                            a.Period != null &&
+                            a.Period.StartTime != null &&
+                            a.Period.EndTime != null )
+                        .Select( a => new DateRange
+                        {
+                            Start = DateTime.SpecifyKind( a.Period.StartTime.Value, DateTimeKind.Local ),
+                            End = DateTime.SpecifyKind( a.Period.EndTime.Value, DateTimeKind.Local )
+                        } )
+                        .ToList();
+                    {
+                        // ensure the the datetime is DateTimeKind.Local since iCal returns DateTimeKind.UTC
+                    }
+                }
+
+                return result;
+            }
+            else
+            {
+                return new List<DateRange>();
+            }
+
         }
 
         #endregion
