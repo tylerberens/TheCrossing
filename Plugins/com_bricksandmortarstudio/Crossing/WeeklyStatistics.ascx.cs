@@ -39,7 +39,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
     /// </summary>
     [DisplayName( "Weekly Statistics" )]
     [Category( "com_bricksandmortarstudio > Crossing" )]
-    [Description( "Dashboard to keep track of volunteers." )]
+    [Description( "Dashboard to keep track of attendance and volunteers." )]
     [MetricCategoriesField( "Metrics", "The metrics listed here will be displayed as 'Areas', with 'Headcount' listed as the subarea.", false )]
     [GroupsField( "Attendance Groups", "The groups listed here will be displayed as 'Areas', with their child groups being listed as the subareas'", false )]
     [TextField( "Volunteer Group Attribute Key", "The key for the group attribute that ties attendance and volunteer teams together", false )]
