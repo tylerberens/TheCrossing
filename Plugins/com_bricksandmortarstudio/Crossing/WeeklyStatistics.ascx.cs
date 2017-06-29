@@ -246,7 +246,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
         {
             var entityTypeGroupGuid = Rock.SystemGuid.EntityType.GROUP.AsGuid();
             var entityTypePersonGuid = Rock.SystemGuid.EntityType.PERSON.AsGuid();
-            var entityTypeScheduleGuid = Rock.SystemGuid.EntityType.SCHEDULE.AsGuid();
+            var entityTypeScheduleEntityId = EntityTypeCache.Read( Rock.SystemGuid.EntityType.SCHEDULE.AsGuid() ).Id;
 
             RockContext rockContext = new RockContext();
             MetricService metricService = new MetricService( rockContext );
@@ -280,16 +280,17 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
 
             foreach ( var metric in metrics )
             {
-                var metricData = metricValueService.Queryable().Where( mv =>
+                var metricData = metricValueService.Queryable("MetricValuePartitions").Where( mv =>
                     mv.MetricValueDateTime >= startDate &&
                     mv.MetricValueDateTime <= endDate &&
                     mv.MetricId == metric.Id &&
-                    mv.MetricValuePartitions.Where( mvp => mvp.MetricPartition.EntityType.Guid == entityTypeScheduleGuid ).FirstOrDefault().EntityId.HasValue
+                    mv.MetricValuePartitions.Where( mvp => mvp.MetricPartition.EntityTypeId== entityTypeScheduleEntityId ).FirstOrDefault().EntityId.HasValue
                     )
-                 .GroupBy( mv => mv.MetricValuePartitions.Where( mvp => mvp.MetricPartition.EntityType.Guid == entityTypeScheduleGuid ).FirstOrDefault().EntityId.Value )
+                 .GroupBy( mv => mv.MetricValuePartitions.Where( mvp => mvp.MetricPartition.EntityTypeId == entityTypeScheduleEntityId ).FirstOrDefault().EntityId.Value )
                  .ToList()
                  .Select( mv => new StatisticRow
                  {
+                     ScheduleDateRanges = GetScheduleDateRanges( scheduleService.Get( mv.Key ), startDate, endDate ),
                      RowId = metric.Id + "-" + mv.Key,
                      SortValue = 0,
                      IsTotal = false,
@@ -298,12 +299,20 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                      Service = scheduleService.Get( mv.Key ).Name,
                      iCalendarContent = scheduleService.Get( mv.Key ).iCalendarContent,
                      Count = mv.Sum( a => a.YValue ).HasValue ? decimal.ToInt32( mv.Sum( a => a.YValue ).Value ) : 0,
-                     Volunteers = metricVolunteerAttendanceData.Where( b =>
-                                 GetScheduleDateRanges( scheduleService.Get( mv.Key ), startDate, endDate ).Any( s => b.StartDateTime >= s.Start && b.StartDateTime <= s.End ) ).Count(),
-                     Total = ( mv.Sum( a => a.YValue ).HasValue ? decimal.ToInt32( mv.Sum( a => a.YValue ).Value ) : 0 ) + ( metricVolunteerAttendanceData.Where( b =>
-                                      GetScheduleDateRanges( scheduleService.Get( mv.Key ), startDate, endDate ).Any( s => b.StartDateTime >= s.Start && b.StartDateTime <= s.End ) ).Count() ),
-                     MetricNote = mv.Max( a => a.Note )
-                 } );
+                     MetricNote = mv.Max( a => a.Note ),
+                     Value = mv
+                 });
+
+                foreach (var row in metricData)
+                {
+                    row.Volunteers = metricVolunteerAttendanceData.Count(b => row.ScheduleDateRanges.Any(s => b.StartDateTime >= s.Start && b.StartDateTime <= s.End));
+                    row.Total = (row.Value.Sum(a => a.YValue).HasValue ? decimal.ToInt32(row.Value.Sum(a => a.YValue).Value) : 0) +
+                                (metricVolunteerAttendanceData.Count(
+                                    b =>
+                                        row.ScheduleDateRanges.Any(
+                                            s => b.StartDateTime >= s.Start && b.StartDateTime <= s.End)));
+
+                }
 
                 if ( metricData.Any() )
                 {
@@ -335,12 +344,14 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                     var volunteerGroupData = volunteerGroupGuid != null ? attendanceService.Queryable().Where( b =>
                                 b.Group.Guid == volunteerGroupGuid.Value ) : null;
 
-                    var childGroupData = attendanceService.Queryable().Where( a =>
+                    var childGroupDataList = attendanceService.Queryable().Where( a =>
                         a.GroupId.HasValue &&
                         a.StartDateTime >= startDate &&
                         a.StartDateTime <= endDate &&
                         ( a.GroupId == attendanceChildGroup.Id ||
-                            attendanceChildDescendantGroupIds.Contains( a.GroupId.Value ) ) )
+                            attendanceChildDescendantGroupIds.Contains( a.GroupId.Value ) ) ).ToList();
+
+                    var childGroupData = childGroupDataList
                         .GroupBy( a => a.ScheduleId )
                         .Select( a => new StatisticRow
                         {
@@ -457,6 +468,10 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
             public int Total { get; set; }
 
             public String MetricNote { get; set; }
+
+            public List<DateRange> ScheduleDateRanges { get; set; }
+
+            public System.Linq.IGrouping<int,MetricValue> Value { get; set; }
         }
 
         #endregion
