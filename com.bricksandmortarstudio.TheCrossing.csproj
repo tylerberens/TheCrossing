@@ -37,6 +37,10 @@
     <Reference Include="EntityFramework">
       <HintPath>..\RockWeb\Bin\EntityFramework.dll</HintPath>
     </Reference>
+    <Reference Include="EntityFramework.SqlServer, Version=6.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\RockWeb\Bin\EntityFramework.SqlServer.dll</HintPath>
+    </Reference>
     <Reference Include="Quartz">
       <HintPath>..\RockWeb\Bin\Quartz.dll</HintPath>
     </Reference>
@@ -61,6 +65,7 @@
     <Compile Include="Data\VolunteerTrackingContext.cs" />
     <Compile Include="Data\VolunteerTrackingService.cs" />
     <Compile Include="Field\Types\GroupsFieldType.cs" />
+    <Compile Include="Jobs\ConnectionRequestReminder.cs" />
     <Compile Include="Migrations\001_VolunteerTracking.cs" />
     <Compile Include="Migrations\002_TrackingWorkflows.cs" />
     <Compile Include="Model\VolunteerMembership.cs" />
