@@ -1,29 +1,14 @@
-// <copyright>
-// Copyright 2013 by the Spark Development Network
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-// </copyright>
-//
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.Entity;
 using System.Linq;
 using Rock;
+using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
 using Rock.Web.Cache;
+using Rock.Web.UI.Controls;
 
 namespace Plugins.com_bricksandmortarstudio.Crossing
 {
@@ -32,7 +17,9 @@ namespace Plugins.com_bricksandmortarstudio.Crossing
     /// </summary>
     [DisplayName( "This Week's Volunteers" )]
     [Category( "Bricks and Mortar Studio" )]
-    [Description( "Template block for developers to use to start a new list block." )]
+    [Description( "Find the volunteers serving this week" )]
+
+    [BooleanField( "Is External", "Is this block meant for external access", false )]
     public partial class ThisWeeksVolunteers : Rock.Web.UI.RockBlock
     {
         #region Fields
@@ -72,9 +59,14 @@ namespace Plugins.com_bricksandmortarstudio.Crossing
         protected override void OnLoad( EventArgs e )
         {
             base.OnLoad( e );
-
+            hfGroupGuid.Value = PageParameter( "group" );
+            if (GetAttributeValue("IsExternal").AsBoolean())
+            {
+                gFilter.Visible = false;
+            }
             if ( !Page.IsPostBack )
             {
+                SetFilter();
                 BindGrid();
             }
         }
@@ -92,7 +84,7 @@ namespace Plugins.com_bricksandmortarstudio.Crossing
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void Block_BlockUpdated( object sender, EventArgs e )
         {
-
+            BindGrid();
         }
 
         /// <summary>
@@ -105,10 +97,60 @@ namespace Plugins.com_bricksandmortarstudio.Crossing
             BindGrid();
         }
 
+        protected void gFilter_ApplyFilterClick( object sender, EventArgs e )
+        {
+            gFilter.SaveUserPreference( "Group", gpGroup.SelectedValue );
+            BindGrid();
+        }
+
+        protected void gFilter_OnClearFilterClick( object sender, EventArgs e )
+        {
+            gFilter.SaveUserPreference( "Group", "" );
+            gpGroup.SetValue(null);
+            BindGrid();
+        }
+
+        protected void gFilter_OnDisplayFilterValue( object sender, GridFilter.DisplayFilterValueArgs e )
+        {
+            switch (e.Key)
+            {
+                case "Group":
+                    string groupName = string.Empty;
+
+                    int? groupId = e.Value.AsIntegerOrNull();
+                    if ( groupId.HasValue )
+                    {
+                        var groupService = new GroupService( new RockContext() );
+                        var group = groupService.Get( groupId.Value );
+                        if ( group != null )
+                        {
+                            groupName = group.Name;
+                        }
+                    }
+
+                    e.Value = groupName;
+                    break;
+            }
+        }
+
         #endregion
 
         #region Methods
 
+        private void SetFilter()
+        {
+            var rockContext = new RockContext();
+            int? groupId = gFilter.GetUserPreference( "Consolidator" ).AsIntegerOrNull();
+            if ( groupId.HasValue )
+            {
+                var groupService = new GroupService( rockContext );
+                var group = groupService.Get( groupId.Value );
+                if ( group != null )
+                {
+                    gpGroup.SetValue( group );
+                }
+            }
+        }
 
         private static int CountDays( DayOfWeek day, DateTime start, DateTime end )
         {
@@ -132,38 +174,77 @@ namespace Plugins.com_bricksandmortarstudio.Crossing
         private void BindGrid()
         {
             var rockContext = new RockContext();
-            string weekTeam = CountDays(DayOfWeek.Sunday, new DateTime( 2017, 08, 27 ) , RockDateTime.Today) % 2 == 1 ? "Team 1" : "Team 2";
+            // Get the team that should be serving this week
+            string weekTeam = CountDays( DayOfWeek.Sunday, new DateTime( 2017, 08, 27 ), RockDateTime.Today ) % 2 == 1 ? "Team 1" : "Team 2";
+
+            // Get the group members who should be serving
             var attributeService = new AttributeService( rockContext );
             var attributeIds =
                 attributeService.GetByEntityTypeId(
-                    EntityTypeCache.Read(Rock.SystemGuid.EntityType.GROUP_MEMBER.AsGuid()).Id).Where( a => a.Key == "AssignedTeam" ).Select(a => a.Id);
-            var attributeValueService = new AttributeValueService(rockContext);
+                    EntityTypeCache.Read( Rock.SystemGuid.EntityType.GROUP_MEMBER.AsGuid() ).Id ).Where( a => a.Key == "AssignedTeam" ).Select( a => a.Id );
+            var attributeValueService = new AttributeValueService( rockContext );
             var groupMemberIds = new List<int>();
 
-            foreach (int attributeId in attributeIds)
+            foreach ( int attributeId in attributeIds )
             {
-                var attributeValues = attributeValueService.GetByAttributeId(attributeId).AsQueryable().AsNoTracking().Where(av => av.Value.Contains(weekTeam));
-                groupMemberIds.AddRange(attributeValues.Where(av => av.EntityId != null).Select(av => av.EntityId.Value));
+                var attributeValues = attributeValueService.GetByAttributeId( attributeId ).AsQueryable().AsNoTracking().Where( av => av.Value.Contains( weekTeam ) );
+                groupMemberIds.AddRange( attributeValues.Where( av => av.EntityId != null ).Select( av => av.EntityId.Value ) );
             }
 
+            // Find the group member information to present
+            IEnumerable<GroupMember> query = new GroupMemberService( rockContext ).GetListByIds( groupMemberIds );
 
-            
-            // sample query to display a few people
-            var qry = new GroupMemberService(rockContext).GetListByIds(groupMemberIds).Select( g =>  new GroupAndPerson() {Name = g.Person.FullName, GroupName = g.Group.Name});
 
-            gList.DataSource = qry.ToList();
+            //Filtering to a specific group branch
+
+            var groupService = new GroupService( rockContext );
+            var group = hfGroupGuid.Value.AsGuidOrNull() == null
+                ? groupService.GetByGuid(hfGroupGuid.Value.AsGuid())
+                : groupService.Get(gFilter.GetUserPreference("Group").AsInteger());
+
+            if ( group != null )
+            {
+                var validGroupIds = new List<int>();
+                validGroupIds.Add(@group.Id);
+                validGroupIds.AddRange(groupService.GetAllDescendents(@group.Id).Select(g => g.Id));
+
+                query = query.Where(gm => validGroupIds.Contains(gm.GroupId));
+            }
+
+            var allScheduledPeople = query.Select( g =>
+                         new GroupAndPerson
+                         {
+                             Name = g.Person.FullName,
+                             GroupName = g.Group.Name,
+                             ParentGroup = g.Group.ParentGroup
+                         } );
+
+            // Sort and bind
+            var sortProperty = gList.SortProperty;
+            if ( sortProperty == null )
+            {
+                gList.DataSource = allScheduledPeople.OrderBy( g => g.Name );
+            }
+            else
+            {
+                gList.DataSource = allScheduledPeople.AsQueryable().Sort(sortProperty);
+            }
             gList.DataBind();
         }
 
         #endregion
+
+
     }
 
     internal class GroupAndPerson
     {
-       public string Name { get; set; }
+        public string Name { get; set; }
 
         public string GroupName { get; set; }
 
         public string WeekToServe { get; set; }
+
+        public Group ParentGroup { get; set; }
     }
 }
