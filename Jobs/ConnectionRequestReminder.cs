@@ -60,7 +60,7 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
             var openConnectionRequests =
                 connectionRequestService.Queryable()
                                         .AsNoTracking()
-                                        .Where( cr => cr.CreatedDateTime >= cutoff && ( cr.ConnectionState == ConnectionState.Active || ( cr.ConnectionState == ConnectionState.FutureFollowUp && cr.FollowupDate.HasValue && cr.FollowupDate.Value < midnightToday ) ) );
+                                        .Where( cr => cr.CreatedDateTime < cutoff && ( cr.ConnectionState == ConnectionState.Active || ( cr.ConnectionState == ConnectionState.FutureFollowUp && cr.FollowupDate.HasValue && cr.FollowupDate.Value < midnightToday ) ) );
 
             if (!openConnectionRequests.Any())
             {
