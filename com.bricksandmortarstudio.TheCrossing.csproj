@@ -65,6 +65,7 @@
     <Compile Include="Data\VolunteerTrackingContext.cs" />
     <Compile Include="Data\VolunteerTrackingService.cs" />
     <Compile Include="Field\Types\GroupsFieldType.cs" />
+    <Compile Include="Jobs\SendGroupMemberReminder.cs" />
     <Compile Include="Jobs\ConnectionRequestAlert.cs" />
     <Compile Include="Jobs\ConnectionRequestReminder.cs" />
     <Compile Include="Migrations\001_VolunteerTracking.cs" />
