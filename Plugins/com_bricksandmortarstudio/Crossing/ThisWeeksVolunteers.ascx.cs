@@ -198,7 +198,7 @@ namespace Plugins.com_bricksandmortarstudio.Crossing
             //Filtering to a specific group branch
 
             var groupService = new GroupService( rockContext );
-            var group = hfGroupGuid.Value.AsGuidOrNull() == null
+            var group = hfGroupGuid.Value.AsGuidOrNull() != null
                 ? groupService.GetByGuid(hfGroupGuid.Value.AsGuid())
                 : groupService.Get(gFilter.GetUserPreference("Group").AsInteger());
 
@@ -223,11 +223,11 @@ namespace Plugins.com_bricksandmortarstudio.Crossing
             var sortProperty = gList.SortProperty;
             if ( sortProperty == null )
             {
-                gList.DataSource = allScheduledPeople.OrderBy( g => g.Name );
+                gList.DataSource = allScheduledPeople.OrderBy( gp => gp.GroupName ).ToList();
             }
             else
             {
-                gList.DataSource = allScheduledPeople.AsQueryable().Sort(sortProperty);
+                gList.DataSource = allScheduledPeople.AsQueryable().Sort(sortProperty).ToList();
             }
             gList.DataBind();
         }

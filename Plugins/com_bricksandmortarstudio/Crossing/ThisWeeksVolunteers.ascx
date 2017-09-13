@@ -15,9 +15,9 @@
                     </Rock:GridFilter>
                     <Rock:Grid ID="gList" runat="server" AllowSorting="true" >
                         <Columns>
-                            <Rock:RockBoundField DataField="Name" HeaderText="Name" SortExpression="Name" />
-                            <Rock:RockBoundField DataField="GroupName" HeaderText="Group" SortExpression="GroupName" />
-                            <Rock:RockBoundField DataField="ParentGroup.Name" HeaderText="Parent Group" SortExpression="ParentGroup.Name"/>
+                            <Rock:RockBoundField DataField="Name" HeaderText="Volunteer" SortExpression="Name" />
+                            <Rock:RockBoundField DataField="GroupName" HeaderText="Team" SortExpression="GroupName" />
+                            <Rock:RockBoundField DataField="ParentGroup.Name" HeaderText="Area" SortExpression="ParentGroup.Name"/>
                         </Columns>
                     </Rock:Grid>
                 </div>
