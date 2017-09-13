@@ -4,6 +4,7 @@ using System.Data.Entity;
 using System.Data.Entity.SqlServer;
 using System.Linq;
 using Quartz;
+using Quartz.Util;
 using Rock;
 using Rock.Attribute;
 using Rock.Communication;
@@ -30,10 +31,17 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
             var systemEmailGuid = dataMap.GetString( "Email" ).AsGuidOrNull();
 
             string appRoot = Rock.Web.Cache.GlobalAttributesCache.Read().GetValue( "ExternalApplicationRoot" );
+
+            if (appRoot.IsNullOrWhiteSpace())
+            {
+                throw new Exception("Couldn't fetch application root!");
+            }
+
             if ( systemEmailGuid == null )
             {
                 throw new Exception( "A system email template needs to be set." );
             }
+
             var systemEmailTemplate = new SystemEmailService( rockContext ).Get( systemEmailGuid.Value );
 
             if ( systemEmailTemplate == null )
@@ -56,7 +64,13 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
             var openConnectionRequests =
                 connectionRequestService.Queryable()
                                         .AsNoTracking()
-                                        .Where( cr => cr.CreatedDateTime >= lastRun && cr.ConnectionState != ConnectionState.Connected );
+                                        .Where( cr => cr.CreatedDateTime >= lastRun && cr.ConnectionState != ConnectionState.Connected && cr.ConnectorPersonAliasId != null );
+
+            if (!openConnectionRequests.Any())
+            {
+                context.Result = string.Format( "There are no open connection requests" );
+                return;
+            }
 
             var groupedRequests = openConnectionRequests
                 .ToList()
@@ -68,14 +82,14 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
                 var connectionRequests = connectionRequestGrouping.ToList();
 
                 var mergeFields = new Dictionary<string, object>
-                            {
-                                {"ConnectionRequests", connectionRequests},
-                                {"Person", connectionRequestGrouping.Key.Person}
-                            };
+                {
+                    {"ConnectionRequests", connectionRequests},
+                    {"Person", connectionRequestGrouping.Key.Person}
+                };
 
                 var recipients = new List<string> { connectionRequestGrouping.Key.Person.Email };
 
-                Email.Send( systemEmailTemplate.From.ResolveMergeFields( mergeFields ), systemEmailTemplate.FromName.ResolveMergeFields( mergeFields ), systemEmailTemplate.Subject.ResolveMergeFields( mergeFields ), recipients, systemEmailTemplate.Body.ResolveMergeFields( mergeFields ), appRoot, null, null );
+                Email.Send( systemEmailTemplate.From.ResolveMergeFields( mergeFields ), systemEmailTemplate.FromName.ResolveMergeFields( mergeFields ), systemEmailTemplate.Subject.ResolveMergeFields( mergeFields ), recipients, systemEmailTemplate.Body.ResolveMergeFields( mergeFields ), appRoot, null );
                 mailedCount++;
             }
             context.Result = string.Format( "{0} reminders were sent ", mailedCount );
