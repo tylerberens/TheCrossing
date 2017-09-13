@@ -24,7 +24,7 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
             var dataMap = context.JobDetail.JobDataMap;
             var systemEmailGuid = dataMap.GetString( "Email" ).AsGuidOrNull();
 
-            string appRoot = Rock.Web.Cache.GlobalAttributesCache.Read().GetValue( "ExternalApplicationRoot" );
+            string appRoot = Rock.Web.Cache.GlobalAttributesCache.Read().GetValue( "PublicApplicationRoot" );
 
             if ( appRoot.IsNullOrWhiteSpace() )
             {

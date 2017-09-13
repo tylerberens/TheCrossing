@@ -30,7 +30,7 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
 
             var systemEmailGuid = dataMap.GetString( "Email" ).AsGuidOrNull();
 
-            string appRoot = Rock.Web.Cache.GlobalAttributesCache.Read().GetValue( "ExternalApplicationRoot" );
+            string appRoot = Rock.Web.Cache.GlobalAttributesCache.Read().GetValue( "PublicApplicationRoot" );
 
             if (appRoot.IsNullOrWhiteSpace())
             {
