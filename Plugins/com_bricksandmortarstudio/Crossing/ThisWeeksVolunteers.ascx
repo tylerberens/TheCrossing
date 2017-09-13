@@ -18,7 +18,7 @@
                             <Rock:RockBoundField DataField="Name" HeaderText="Volunteer" SortExpression="Name" />
                             <Rock:RockBoundField DataField="GroupName" HeaderText="Team" SortExpression="GroupName" />
                             <Rock:RockBoundField DataField="ParentGroup.Name" HeaderText="Area" SortExpression="ParentGroup.Name"/>
-                            <Rock:RockBoundField DataField="ServiceTimes.Value" HeaderText="Service Times"/>
+                            <Rock:RockBoundField DataField="ServiceTimes.Value" HeaderText="Service Times" SortExpression="ServiceTimes.Value"/>
                         </Columns>
                     </Rock:Grid>
                 </div>
