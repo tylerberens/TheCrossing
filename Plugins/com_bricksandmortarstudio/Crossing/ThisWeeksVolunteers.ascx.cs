@@ -179,13 +179,18 @@ namespace Plugins.com_bricksandmortarstudio.Crossing
 
             // Get the group members who should be serving
             var attributeService = new AttributeService( rockContext );
-            var attributeIds =
+            var groupMemberEntityType = EntityTypeCache.Read(Rock.SystemGuid.EntityType.GROUP_MEMBER.AsGuid());
+            var assignedTeamAttributeIds =
                 attributeService.GetByEntityTypeId(
                     EntityTypeCache.Read( Rock.SystemGuid.EntityType.GROUP_MEMBER.AsGuid() ).Id ).Where( a => a.Key == "AssignedTeam" ).Select( a => a.Id );
+
+            var assignedServicesAttributeIds =
+                attributeService.GetByEntityTypeId( groupMemberEntityType.Id ).Where( a => a.Key == "AssignedServices" ).Select( a => a.Id );
+
             var attributeValueService = new AttributeValueService( rockContext );
             var groupMemberIds = new List<int>();
 
-            foreach ( int attributeId in attributeIds )
+            foreach ( int attributeId in assignedTeamAttributeIds )
             {
                 var attributeValues = attributeValueService.GetByAttributeId( attributeId ).AsQueryable().AsNoTracking().Where( av => av.Value.Contains( weekTeam ) );
                 groupMemberIds.AddRange( attributeValues.Where( av => av.EntityId != null ).Select( av => av.EntityId.Value ) );
@@ -204,19 +209,20 @@ namespace Plugins.com_bricksandmortarstudio.Crossing
 
             if ( group != null )
             {
-                var validGroupIds = new List<int>();
-                validGroupIds.Add(@group.Id);
-                validGroupIds.AddRange(groupService.GetAllDescendents(@group.Id).Select(g => g.Id));
+                var validGroupIds = new List<int> {group.Id};
+                validGroupIds.AddRange(groupService.GetAllDescendents(group.Id).Select(g => g.Id));
 
                 query = query.Where(gm => validGroupIds.Contains(gm.GroupId));
             }
+            
 
-            var allScheduledPeople = query.Select( g =>
+            var allScheduledPeople = query.Select( gm =>
                          new GroupAndPerson
                          {
-                             Name = g.Person.FullName,
-                             GroupName = g.Group.Name,
-                             ParentGroup = g.Group.ParentGroup
+                             Name = gm.Person.FullName,
+                             GroupName = gm.Group.Name,
+                             ParentGroup = gm.Group.ParentGroup,
+                             ServiceTimes = attributeValueService.Queryable().AsNoTracking().Where( a => a.EntityId == gm.Id && assignedServicesAttributeIds.Contains(a.AttributeId)).FirstOrDefault()
                          } );
 
             // Sort and bind
@@ -246,5 +252,7 @@ namespace Plugins.com_bricksandmortarstudio.Crossing
         public string WeekToServe { get; set; }
 
         public Group ParentGroup { get; set; }
+
+        public AttributeValue ServiceTimes { get; set; }
     }
 }
