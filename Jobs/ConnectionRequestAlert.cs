@@ -68,7 +68,7 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
 
             if (!openConnectionRequests.Any())
             {
-                context.Result = string.Format( "There are no open connection requests" );
+                context.Result = "There are no open and assigned connection requests to send alerts for";
                 return;
             }
 
@@ -79,6 +79,11 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
             int mailedCount = 0;
             foreach ( var connectionRequestGrouping in groupedRequests )
             {
+
+                if (connectionRequestGrouping.Key == null)
+                {
+                    continue;
+                }
                 var connectionRequests = connectionRequestGrouping.ToList();
 
                 var mergeFields = new Dictionary<string, object>

@@ -4,6 +4,7 @@ using System.Data.Entity;
 using System.Data.Entity.SqlServer;
 using System.Linq;
 using Quartz;
+using Quartz.Util;
 using Rock;
 using Rock.Attribute;
 using Rock.Communication;
@@ -24,6 +25,12 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
             var systemEmailGuid = dataMap.GetString( "Email" ).AsGuidOrNull();
 
             string appRoot = Rock.Web.Cache.GlobalAttributesCache.Read().GetValue( "ExternalApplicationRoot" );
+
+            if ( appRoot.IsNullOrWhiteSpace() )
+            {
+                throw new Exception( "Couldn't fetch application root!" );
+            }
+
             if ( systemEmailGuid == null )
             {
                 throw new Exception( "A system email template needs to be set." );
@@ -55,6 +62,12 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
                                         .AsNoTracking()
                                         .Where( cr => cr.CreatedDateTime >= cutoff && ( cr.ConnectionState == ConnectionState.Active || ( cr.ConnectionState == ConnectionState.FutureFollowUp && cr.FollowupDate.HasValue && cr.FollowupDate.Value < midnightToday ) ) );
 
+            if (!openConnectionRequests.Any())
+            {
+                context.Result = "There are no open and assigned connection requests to send reminders for";
+                return;
+            }
+
             int totalCriticalCount = openConnectionRequests.Count( cr => cr.ConnectionStatus.IsCritical );
             int totalIdleCount = openConnectionRequests
                                         .Count( cr =>
@@ -63,7 +76,7 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
                                         );
 
             var groupedRequests = openConnectionRequests
-                .ToList()
+                .Where(cr => cr.ConnectorPersonAliasId != null)
                 .GroupBy( cr => cr.ConnectorPersonAlias );
 
             int mailedCount = 0;
@@ -76,8 +89,13 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
                                 {"ConnectionRequests", connectionRequests},
                                 {"Person", connectionRequestGrouping.Key.Person},
                                 {"CriticalCount", connectionRequests.Count(cr => cr.ConnectionStatus.IsCritical) },
-                                {"IdleCount", connectionRequests.Count(cr => ( cr.ConnectionRequestActivities.Any() && cr.ConnectionRequestActivities.Max( ra => ra.CreatedDateTime ) < SqlFunctions.DateAdd( "day", -cr.ConnectionOpportunity.ConnectionType.DaysUntilRequestIdle, currentDateTime ) )
-                                            || ( !cr.ConnectionRequestActivities.Any() && cr.CreatedDateTime < SqlFunctions.DateAdd( "day", -cr.ConnectionOpportunity.ConnectionType.DaysUntilRequestIdle, currentDateTime ) )) },
+                                {"IdleCount", connectionRequests.Count(cr =>
+                                {
+                                    var idleDate = currentDateTime.AddDays(-cr.ConnectionOpportunity.ConnectionType.DaysUntilRequestIdle);
+                                    return cr.ConnectionRequestActivities.Any() &&
+                                           cr.ConnectionRequestActivities.Max(ra => ra.CreatedDateTime) < idleDate
+                                           || (!cr.ConnectionRequestActivities.Any() && cr.CreatedDateTime < idleDate);
+                                }) },
                                 {"TotalIdleCount", totalIdleCount },
                                 {"TotalCriticalCount", totalCriticalCount }
                             };
