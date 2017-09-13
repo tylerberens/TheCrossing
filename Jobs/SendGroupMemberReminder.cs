@@ -14,6 +14,7 @@ using Rock.Web.Cache;
 namespace com.bricksandmortarstudio.TheCrossing.Jobs
 {
     [SystemEmailField( "Email", "The System Email to send to group members" )]
+    [GroupField("Root Group", "This group and its descendent groups will be the only groups emailed", true)]
     public class SendGroupMemberReminder : IJob
     {
         public SendGroupMemberReminder() { }
@@ -22,6 +23,7 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
             var rockContext = new RockContext();
             var dataMap = context.JobDetail.JobDataMap;
             var systemEmailGuid = dataMap.GetString( "Email" ).AsGuidOrNull();
+            var groupFieldGuid = dataMap.GetString("RootGroup").AsGuidOrNull();
 
             string appRoot = GlobalAttributesCache.Read().GetValue( "ExternalApplicationRoot" );
             if ( systemEmailGuid == null )
@@ -35,6 +37,15 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
                 throw new Exception( "The system email template setting is not a valid system email template." );
             }
 
+            if (groupFieldGuid == null)
+            {
+                throw new Exception("A group must be specified");
+            }
+
+            var groupService = new GroupService(rockContext);
+            var rootGroup = groupService.GetByGuid(groupFieldGuid.Value);
+            var validGroupIds = new List<int> {rootGroup.Id};
+            validGroupIds.AddRange(groupService.GetAllDescendents(rootGroup.Id).Select(g => g.Id));
 
             // Check to see if we should skip this week
             var definedTypeId = new DefinedTypeService(rockContext).Queryable().FirstOrDefault(dt => dt.Name == "Volunteer Reminder Exclusions" )?.Id;
@@ -71,9 +82,9 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
             }
 
 
-            var qry = new GroupMemberService(rockContext).GetListByIds(groupMemberIds).Distinct();
+            var groupMembers = new GroupMemberService(rockContext).GetListByIds(groupMemberIds).Where(gm => validGroupIds.Contains( gm.GroupId ) ).Distinct();
             int mailedCount = 0;
-            foreach ( var groupMember in qry )
+            foreach ( var groupMember in groupMembers )
             {
                 var mergeFields = new Dictionary<string, object>
                             {
@@ -92,16 +103,20 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
 
         private bool DatesAreInTheSameWeek( DateTime date1, DateTime date2 )
         {
+            if (System.Globalization.DateTimeFormatInfo.CurrentInfo == null)
+            {
+                throw new Exception("System.Globalization.DateTimeFormatInfo.CurrentInfo is null");
+            }
             var cal = System.Globalization.DateTimeFormatInfo.CurrentInfo.Calendar;
-            var d1 = date1.Date.AddDays( -1 * ( int ) cal.GetDayOfWeek( date1 ) -1 );
-            var d2 = date2.Date.AddDays( -1 * ( int ) cal.GetDayOfWeek( date2 ) -1 );
+            var d1 = date1.Date.AddDays(-1*(int) cal.GetDayOfWeek(date1) - 1);
+            var d2 = date2.Date.AddDays(-1*(int) cal.GetDayOfWeek(date2) - 1);
 
             return d1 == d2;
         }
 
         private static int CountDays( DayOfWeek day, DateTime start, DateTime end )
         {
-            TimeSpan ts = end - start;                       // Total duration
+            var ts = end - start;                       // Total duration
             int count = ( int ) Math.Floor( ts.TotalDays / 7 );   // Number of whole weeks
             int remainder = ( int ) ( ts.TotalDays % 7 );         // Number of remaining days
             int sinceLastDay = ( int ) ( end.DayOfWeek - day );   // Number of days since last [day]
