@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.Entity;
 using System.Linq;
+using Quartz.Util;
 using Rock;
 using Rock.Attribute;
 using Rock.Data;
@@ -60,10 +61,13 @@ namespace Plugins.com_bricksandmortarstudio.Crossing
         {
             base.OnLoad( e );
             hfGroupGuid.Value = PageParameter( "group" );
-            if (GetAttributeValue("IsExternal").AsBoolean())
+            var isExternal = GetAttributeValue( "IsExternal" ).AsBoolean();
+            if ( isExternal && hfGroupGuid.Value.IsNullOrWhiteSpace() )
             {
-                gFilter.Visible = false;
+                pnlView.Visible = false;
+                return;
             }
+            gFilter.Visible = isExternal;
             if ( !Page.IsPostBack )
             {
                 SetFilter();
@@ -106,13 +110,13 @@ namespace Plugins.com_bricksandmortarstudio.Crossing
         protected void gFilter_OnClearFilterClick( object sender, EventArgs e )
         {
             gFilter.SaveUserPreference( "Group", "" );
-            gpGroup.SetValue(null);
+            gpGroup.SetValue( null );
             BindGrid();
         }
 
         protected void gFilter_OnDisplayFilterValue( object sender, GridFilter.DisplayFilterValueArgs e )
         {
-            switch (e.Key)
+            switch ( e.Key )
             {
                 case "Group":
                     string groupName = string.Empty;
@@ -179,7 +183,7 @@ namespace Plugins.com_bricksandmortarstudio.Crossing
 
             // Get the group members who should be serving
             var attributeService = new AttributeService( rockContext );
-            var groupMemberEntityType = EntityTypeCache.Read(Rock.SystemGuid.EntityType.GROUP_MEMBER.AsGuid());
+            var groupMemberEntityType = EntityTypeCache.Read( Rock.SystemGuid.EntityType.GROUP_MEMBER.AsGuid() );
             var assignedTeamAttributeIds =
                 attributeService.GetByEntityTypeId(
                     EntityTypeCache.Read( Rock.SystemGuid.EntityType.GROUP_MEMBER.AsGuid() ).Id ).Where( a => a.Key == "AssignedTeam" ).Select( a => a.Id );
@@ -204,17 +208,17 @@ namespace Plugins.com_bricksandmortarstudio.Crossing
 
             var groupService = new GroupService( rockContext );
             var group = hfGroupGuid.Value.AsGuidOrNull() != null
-                ? groupService.GetByGuid(hfGroupGuid.Value.AsGuid())
-                : groupService.Get(gFilter.GetUserPreference("Group").AsInteger());
+                ? groupService.GetByGuid( hfGroupGuid.Value.AsGuid() )
+                : groupService.Get( gFilter.GetUserPreference( "Group" ).AsInteger() );
 
             if ( group != null )
             {
-                var validGroupIds = new List<int> {group.Id};
-                validGroupIds.AddRange(groupService.GetAllDescendents(group.Id).Select(g => g.Id));
+                var validGroupIds = new List<int> { group.Id };
+                validGroupIds.AddRange( groupService.GetAllDescendents( group.Id ).Select( g => g.Id ) );
 
-                query = query.Where(gm => validGroupIds.Contains(gm.GroupId));
+                query = query.Where( gm => validGroupIds.Contains( gm.GroupId ) );
             }
-            
+
 
             var allScheduledPeople = query.Select( gm =>
                          new GroupAndPerson
@@ -222,7 +226,7 @@ namespace Plugins.com_bricksandmortarstudio.Crossing
                              Name = gm.Person.FullName,
                              GroupName = gm.Group.Name,
                              ParentGroup = gm.Group.ParentGroup,
-                             ServiceTimes = attributeValueService.Queryable().AsNoTracking().Where( a => a.EntityId == gm.Id && assignedServicesAttributeIds.Contains(a.AttributeId)).FirstOrDefault()
+                             ServiceTimes = attributeValueService.Queryable().AsNoTracking().Where( a => a.EntityId == gm.Id && assignedServicesAttributeIds.Contains( a.AttributeId ) ).FirstOrDefault()
                          } );
 
             // Sort and bind
@@ -233,7 +237,7 @@ namespace Plugins.com_bricksandmortarstudio.Crossing
             }
             else
             {
-                gList.DataSource = allScheduledPeople.AsQueryable().Sort(sortProperty).ToList();
+                gList.DataSource = allScheduledPeople.AsQueryable().Sort( sortProperty ).ToList();
             }
             gList.DataBind();
         }
