@@ -131,7 +131,7 @@ namespace com.bricksandmortarstudio.TheCrossing.Workflow.Action.VolunteerTrackin
                 {
                     var volunteerTrackingContext = new VolunteerTrackingContext();
                     var volunteerMembershipService = new VolunteerMembershipService( volunteerTrackingContext );
-                    var oldVolunteerMembership = volunteerMembershipService.Queryable().FirstOrDefault(v => v.GroupId == groupMember.GroupId && v.PersonId == groupMember.PersonId);
+                    var oldVolunteerMembership = volunteerMembershipService.Queryable().FirstOrDefault(v => v.GroupId == groupMember.GroupId && v.PersonId == groupMember.PersonId && v.LeftGroupDateTime == null );
                     if( oldVolunteerMembership != null)
                     {
                         oldVolunteerMembership.LeftGroupDateTime = DateTime.Now;
