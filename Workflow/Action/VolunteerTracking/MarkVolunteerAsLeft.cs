@@ -124,13 +124,9 @@ namespace com.bricksandmortarstudio.TheCrossing.Workflow.Action.VolunteerTrackin
             // Mark Volunteer as Left
             if ( !errorMessages.Any() )
             {
-                var groupMemberService = new GroupMemberService( rockContext );
-                var groupMember = groupMemberService.Queryable().FirstOrDefault( m => m.GroupId == group.Id && m.PersonId == person.Id );
-
-
                 var volunteerTrackingContext = new VolunteerTrackingContext();
                 var volunteerMembershipService = new VolunteerMembershipService( volunteerTrackingContext );
-                var volunteerMembership = volunteerMembershipService.Queryable().FirstOrDefault( v => v.GroupId == groupMember.GroupId && v.PersonId == groupMember.PersonId && v.LeftGroupDateTime == null );
+                var volunteerMembership = volunteerMembershipService.Queryable().FirstOrDefault( v => v.GroupId == group.Id && v.PersonId == person.Id && v.LeftGroupDateTime == null );
                 if ( volunteerMembership != null )
                 {
                     volunteerMembership.LeftGroupDateTime = DateTime.Now;
