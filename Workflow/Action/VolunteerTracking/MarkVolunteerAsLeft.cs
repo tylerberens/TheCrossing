@@ -99,7 +99,7 @@ namespace com.bricksandmortarstudio.TheCrossing.Workflow.Action.VolunteerTrackin
                     {
                         if ( attributePerson.FieldType.Class == typeof( Rock.Field.Types.PersonFieldType ).FullName )
                         {
-                            Guid personAliasGuid = attributePersonValue.AsGuid();
+                            var personAliasGuid = attributePersonValue.AsGuid();
                             if ( !personAliasGuid.IsEmpty() )
                             {
                                 person = new PersonAliasService( rockContext ).Queryable()
@@ -118,30 +118,28 @@ namespace com.bricksandmortarstudio.TheCrossing.Workflow.Action.VolunteerTrackin
 
             if ( person == null )
             {
-                errorMessages.Add( string.Format( "Person could not be found for selected value ('{0}')!", guidPersonAttribute.ToString() ) );
+                errorMessages.Add( string.Format( "Person could not be found for selected value ('{0}')!", guidPersonAttribute ) );
             }
 
             // Mark Volunteer as Left
             if ( !errorMessages.Any() )
             {
                 var groupMemberService = new GroupMemberService( rockContext );
-                var groupMember = groupMemberService.Queryable().Where( m => m.GroupId == group.Id && m.PersonId == person.Id ).FirstOrDefault();
+                var groupMember = groupMemberService.Queryable().FirstOrDefault( m => m.GroupId == group.Id && m.PersonId == person.Id );
 
-                if ( groupMember != null )
+
+                var volunteerTrackingContext = new VolunteerTrackingContext();
+                var volunteerMembershipService = new VolunteerMembershipService( volunteerTrackingContext );
+                var volunteerMembership = volunteerMembershipService.Queryable().FirstOrDefault( v => v.GroupId == groupMember.GroupId && v.PersonId == groupMember.PersonId );
+                if ( volunteerMembership != null )
                 {
-                    VolunteerTrackingContext volunteerTrackingContext = new VolunteerTrackingContext();
-                    VolunteerMembershipService volunteerMembershipService = new VolunteerMembershipService( volunteerTrackingContext );
-                    var volunteerMembership = volunteerMembershipService.Queryable().Where( v => v.GroupId == groupMember.GroupId && v.PersonId == groupMember.PersonId ).FirstOrDefault();
-                    if( volunteerMembership != null)
-                    {
-                        volunteerMembership.LeftGroupDateTime = DateTime.Now;
-                    }
+                    volunteerMembership.LeftGroupDateTime = DateTime.Now;
                     volunteerTrackingContext.SaveChanges();
                 }
                 else
                 {
                     // the person is not in the group provided
-                    errorMessages.Add( "The person is not in the group provided." );
+                    errorMessages.Add( "The person was not in the group provided." );
                 }
             }
 

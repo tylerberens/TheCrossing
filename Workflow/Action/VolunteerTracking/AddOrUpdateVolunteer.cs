@@ -125,13 +125,13 @@ namespace com.bricksandmortarstudio.TheCrossing.Workflow.Action.VolunteerTrackin
             if ( !errorMessages.Any() )
             {
                 var groupMemberService = new GroupMemberService( rockContext );
-                var groupMember = groupMemberService.Queryable().Where( m => m.GroupId == group.Id && m.PersonId == person.Id ).FirstOrDefault();
+                var groupMember = groupMemberService.Queryable().FirstOrDefault(m => m.GroupId == group.Id && m.PersonId == person.Id);
 
                 if ( groupMember != null )
                 {
-                    VolunteerTrackingContext volunteerTrackingContext = new VolunteerTrackingContext();
-                    VolunteerMembershipService volunteerMembershipService = new VolunteerMembershipService( volunteerTrackingContext );
-                    var oldVolunteerMembership = volunteerMembershipService.Queryable().Where( v => v.GroupId == groupMember.GroupId && v.PersonId == groupMember.PersonId ).FirstOrDefault();
+                    var volunteerTrackingContext = new VolunteerTrackingContext();
+                    var volunteerMembershipService = new VolunteerMembershipService( volunteerTrackingContext );
+                    var oldVolunteerMembership = volunteerMembershipService.Queryable().FirstOrDefault(v => v.GroupId == groupMember.GroupId && v.PersonId == groupMember.PersonId);
                     if( oldVolunteerMembership != null)
                     {
                         oldVolunteerMembership.LeftGroupDateTime = DateTime.Now;
@@ -144,6 +144,8 @@ namespace com.bricksandmortarstudio.TheCrossing.Workflow.Action.VolunteerTrackin
                         GroupRoleId = groupMember.GroupRoleId,
                         JoinedGroupDateTime = DateTime.Now
                     };
+
+                    volunteerMembershipService.Add(newVolunteerMembership);
 
                     volunteerTrackingContext.SaveChanges();
                 }
