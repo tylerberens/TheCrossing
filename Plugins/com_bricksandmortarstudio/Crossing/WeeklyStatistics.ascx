@@ -32,7 +32,7 @@
                         <div class="row">
                             <div class="col-md-10 col-md-offset-1">
                                 <div class="grid grid-panel">
-                                    <Rock:Grid ID="gThisYear" runat="server" RowItemText="Attendance">
+                                    <Rock:Grid ID="gThisYear" runat="server" AllowPaging="False" ShowActionRow="False" RowItemText="Attendance">
                                         <Columns>
                                             <Rock:RockBoundField DataField="Area" HeaderText="Area" SortExpression="Area" />
                                             <Rock:RockBoundField DataField="Subarea" HeaderText="Subarea" SortExpression="Subarea" />
@@ -61,7 +61,7 @@
                         <div class="row">
                             <div class="col-md-10 col-md-offset-1">
                                 <div class="grid grid-panel">
-                                    <Rock:Grid ID="gLastYear" runat="server" RowItemText="Attendance">
+                                    <Rock:Grid ID="gLastYear" AllowPaging="False" ShowActionRow="False"  runat="server" RowItemText="Attendance">
                                         <Columns>
                                             <Rock:RockBoundField DataField="Area" HeaderText="Area" SortExpression="Area" />
                                             <Rock:RockBoundField DataField="Subarea" HeaderText="Subarea" SortExpression="Subarea" />
