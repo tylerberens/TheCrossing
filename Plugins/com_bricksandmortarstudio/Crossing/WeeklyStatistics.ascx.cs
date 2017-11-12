@@ -56,7 +56,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
             this.AddConfigurationUpdateTrigger( upnlContent );
         }
 
-        
+
 
         /// <summary>
         /// Raises the <see cref="E:System.Web.UI.Control.Load" /> event.
@@ -122,7 +122,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
 
                 if ( statisticsRows != null && statisticsRows.IsTotal )
                 {
-                    e.Row.AddCssClass("is-bold");
+                    e.Row.AddCssClass( "is-bold" );
                 }
             }
         }
@@ -233,7 +233,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                 .ThenBy( sr => sr.Subarea )
                 .ThenBy( sr => sr.IsTotal )
                 .ThenBy( sr => ( ( int ) sr.DayOfWeek + 6 ) % 7 )
-                .ThenBy(sr => sr.StartTime)
+                .ThenBy( sr => sr.StartTime )
                 .ToList();
             gThisYear.DataBind();
 
@@ -313,7 +313,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                                                         return new StatisticRow
                                                         {
                                                             ScheduleDateRanges =
-                                                                GetScheduleDateRanges(service,
+                                                                GetScheduleDateRanges( service,
                                                                     startDate, endDate ),
                                                             RowId = metric.Id + "-" + mv.Key,
                                                             SortValue = 0,
@@ -321,7 +321,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                                                             Area = metric.Title,
                                                             Subarea = "HeadCount",
                                                             StartTime = service.WeeklyTimeOfDay ?? service.StartTimeOfDay,
-                                                            DayOfWeek = service.WeeklyDayOfWeek ?? GetLastDayOfWeek(service, startDate, endDate),
+                                                            DayOfWeek = service.WeeklyDayOfWeek ?? GetLastDayOfWeek( service, startDate, endDate ),
                                                             Service = service.Name,
                                                             Count =
                                                                 mv.Sum( a => a.YValue ).HasValue
@@ -346,9 +346,12 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                     }
                 }
 
-                if ( metricData.Any() )
+
+                datasource.AddRange( metricData );
+
+                if ( metricData.Count > 1 )
                 {
-                    var subTotalRow = metricData.Concat( new List<StatisticRow>{ new StatisticRow
+                    var subTotalRow = new StatisticRow
                     {
                         RowId = metric.Id.ToString(),
                         SortValue = 0,
@@ -356,15 +359,30 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                         Area = metric.Title,
                         Subarea = "HeadCount",
                         Service = "Sub-Total",
-                        Count = metricData.Sum(mv => mv.Count),
-                        Volunteers = metricData.Sum(mv => mv.Volunteers),
-                        Total = metricData.Sum(mv => mv.Total)
-                    } }.AsQueryable() );
+                        Count = metricData.Sum( mv => mv.Count ),
+                        Volunteers = metricData.Sum( mv => mv.Volunteers ),
+                        Total = metricData.Sum( mv => mv.Total )
+                    };
 
-                    datasource.AddRange( subTotalRow );
+                    datasource.Add( subTotalRow );
                 }
 
             }
+
+            var totalRow = new StatisticRow
+            {
+                RowId = "HeadcountTotal",
+                SortValue = 1,
+                IsTotal = true,
+                Area = "HeadCount Total",
+                Subarea = "HeadCount",
+                Service = "Total",
+                Count = datasource.Where( row => !row.IsTotal ).Sum( row => row.Count ),
+                Volunteers = datasource.Where( row => !row.IsTotal ).Sum( mv => mv.Volunteers ),
+                Total = datasource.Where( row => !row.IsTotal ).Sum( mv => mv.Total )
+            };
+
+            datasource.Add( totalRow );
 
             string attributeKeyString = GetAttributeValue( "VolunteerGroupAttributeKey" );
             var volunteerGroupAttributeIdList = attributeService.Queryable()
@@ -417,35 +435,37 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                                 endDate );
                             var row = new StatisticRow();
                             row.RowId = acg.Id + "-" + a.Key;
-                            row.SortValue = 1;
+                            row.SortValue = 2;
                             row.IsTotal = false;
                             row.Area = ag.Name;
                             row.Subarea = acg.Name;
                             row.Service = attendance.Schedule.Name;
                             row.StartTime = attendance.Schedule.WeeklyTimeOfDay ?? attendance.Schedule.StartTimeOfDay;
-                            row.DayOfWeek = attendance.Schedule.WeeklyDayOfWeek ?? GetLastDayOfWeek( attendance.Schedule, startDate, endDate);
+                            row.DayOfWeek = attendance.Schedule.WeeklyDayOfWeek ?? GetLastDayOfWeek( attendance.Schedule, startDate, endDate );
                             row.Count = a.Count();
                             row.Volunteers = volunteerGroupAttendance.Count( b => scheduleDateRanges.Any( s => b.StartDateTime >= s.Start && b.StartDateTime <= s.End ) );
                             row.Total = a.Count() + volunteerGroupAttendance.Count( b => scheduleDateRanges.Any( s => b.StartDateTime >= s.Start && b.StartDateTime <= s.End ) );
                             return row;
                         } ).ToList();
 
-                        if ( statisticRows.Any() )
-                        {
-                            var subTotalRow = statisticRows.ToList().Concat( new List<StatisticRow>{ new StatisticRow
-                        {
-                            RowId = attendanceChildGroup.Id.ToString(),
-                            SortValue = 1,
-                            IsTotal = true,
-                            Area = attendanceGroup.Name,
-                            Subarea = attendanceChildGroup.Name,
-                            Service = "Sub-Total",
-                            Count = statisticRows.Sum(cg => cg.Count),
-                            Volunteers = statisticRows.Sum(cg => cg.Volunteers),
-                            Total = statisticRows.Sum(cg => cg.Total)
-                        } }.AsQueryable() );
+                        datasource.AddRange( statisticRows );
 
-                            datasource.AddRange( subTotalRow );
+                        if ( statisticRows.Count > 1 )
+                        {
+                            var subTotalRow = new StatisticRow
+                            {
+                                RowId = attendanceChildGroup.Id.ToString(),
+                                SortValue = 2,
+                                IsTotal = true,
+                                Area = attendanceGroup.Name,
+                                Subarea = attendanceChildGroup.Name,
+                                Service = "Sub-Total",
+                                Count = statisticRows.Sum( cg => cg.Count ),
+                                Volunteers = statisticRows.Sum( cg => cg.Volunteers ),
+                                Total = statisticRows.Sum( cg => cg.Total )
+                            };
+
+                            datasource.Add( subTotalRow );
                         }
 
                     }
@@ -455,7 +475,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
             datasource.Add( new StatisticRow
             {
                 RowId = "Total",
-                SortValue = 2,
+                SortValue = 3,
                 IsTotal = true,
                 Area = "Grand Total",
                 Subarea = "Total",
@@ -509,10 +529,10 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
             {
                 var occurrences = ScheduleICalHelper.GetOccurrences( calEvent, beginDateTime, endDateTime );
                 return occurrences
-                    .FirstOrDefault(a =>
-                        a.Period != null &&
-                        a.Period.StartTime != null &&
-                        a.Period.EndTime != null)
+                    .FirstOrDefault( a =>
+                         a.Period != null &&
+                         a.Period.StartTime != null &&
+                         a.Period.EndTime != null )
                     .Period.StartTime.DayOfWeek;
                 // ensure the the datetime is DateTimeKind.Local since iCal returns DateTimeKind.UTC
             }
@@ -539,7 +559,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
 
             public DayOfWeek DayOfWeek { get; set; }
             public TimeSpan StartTime { get; set; }
-            
+
 
             public int Count { get; set; }
 
