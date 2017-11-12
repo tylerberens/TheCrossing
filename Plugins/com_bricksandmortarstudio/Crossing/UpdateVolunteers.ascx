@@ -8,8 +8,7 @@
         </Rock:NotificationBox>
         <Rock:NotificationBox ID="nbResult" runat="server" Visible="false" />
 
-        <Rock:GroupTypesPicker ID="gtpGroupTypes" runat="server" Label="Group Types" />
-        <asp:LinkButton runat="server" ID="btnImport" CssClass="btn btn-primary" Text="Import Volunteers" OnClick="btnImport_Click" />
+        <Rock:BootstrapButton runat="server" ID="btnImport" CssClass="btn btn-primary" Text="Import Volunteers" OnClick="btnImport_Click" DataLoadingText="Importing" />
 
     </ContentTemplate>
 </asp:UpdatePanel>

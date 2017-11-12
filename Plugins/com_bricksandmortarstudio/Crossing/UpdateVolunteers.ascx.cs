@@ -43,6 +43,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
     [DisplayName( "Update Volunteers" )]
     [Category( "com_bricksandmortarstudio > Crossing" )]
     [Description( "Block to import existing group members into the VolunteerMembership table." )]
+    [GroupTypesField("Group Types", "The group types to import", true)]
     public partial class UpdateVolunteers : Rock.Web.UI.RockBlock
     {
         #region Base Control Methods
@@ -90,18 +91,21 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
 
         protected void btnImport_Click( object sender, EventArgs e )
         {
+            btnImport.Enabled = false;
+            var rockContext = new RockContext();
             var volunteerTrackingContext = new VolunteerTrackingContext();
             var volunteerMembershipService = new VolunteerMembershipService( volunteerTrackingContext );
-            var groupService = new GroupService( new RockContext() );
+            var groupService = new GroupService( rockContext );
 
-            var groupTypeIds = gtpGroupTypes.SelectedGroupTypeIds;
+            var groupTypeGuids = GetAttributeValue("GroupTypes").SplitDelimitedValues().AsGuidList();
+            var groupTypeIds = new GroupTypeService(rockContext).GetByGuids(groupTypeGuids).Select(gt => gt.Id);
             var groups = groupService.Queryable().Where( g => groupTypeIds.Contains( g.GroupTypeId ) ).ToList();
 
             foreach ( var group in groups )
             {
                 foreach ( var groupMember in group.Members )
                 {
-                    var volunteerMember = volunteerMembershipService.Queryable().Where( v => v.GroupId == groupMember.GroupId && v.PersonId == groupMember.PersonId ).FirstOrDefault();
+                    var volunteerMember = volunteerMembershipService.Queryable().FirstOrDefault( v => v.GroupId == groupMember.GroupId && v.PersonId == groupMember.PersonId && v.LeftGroupDateTime == null );
                     if ( volunteerMember == null )
                     {
                         volunteerMember = new VolunteerMembership
@@ -118,6 +122,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
             }
 
             volunteerTrackingContext.SaveChanges();
+            btnImport.Enabled = true;
         }
         #endregion
 
