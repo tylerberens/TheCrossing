@@ -8,6 +8,7 @@ using Rock.Model;
 using Rock.Web.Cache;
 using Rock.Attribute;
 using System.Text;
+using System.Web.UI.WebControls;
 using com.bricksandmortarstudio.checkinextensions.Utils;
 
 using com.bricksandmortarstudio.TheCrossing.Attribute;
@@ -48,11 +49,14 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
             base.OnInit( e );
             gThisYear.GridRebind += gThisYear_GridRebind;
             gLastYear.GridRebind += gLastYear_GridRebind;
-
+            gLastYear.RowDataBound += gLastYear_OnRowDataBound;
+            gThisYear.RowDataBound += gThisYear_OnRowDataBound;
             // this event gets fired after block settings are updated. it's nice to repaint the screen if these settings would alter it
             this.BlockUpdated += Block_BlockUpdated;
             this.AddConfigurationUpdateTrigger( upnlContent );
         }
+
+        
 
         /// <summary>
         /// Raises the <see cref="E:System.Web.UI.Control.Load" /> event.
@@ -108,6 +112,32 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
         protected void dpWeek_TextChanged( object sender, EventArgs e )
         {
             BindGrids();
+        }
+
+        private void gThisYear_OnRowDataBound( object sender, GridViewRowEventArgs e )
+        {
+            if ( e.Row.RowType == DataControlRowType.DataRow )
+            {
+                var statisticsRows = e.Row.DataItem as StatisticRow;
+
+                if ( statisticsRows != null && statisticsRows.IsTotal )
+                {
+                    e.Row.AddCssClass("is-bold");
+                }
+            }
+        }
+
+        private void gLastYear_OnRowDataBound( object sender, GridViewRowEventArgs e )
+        {
+            if ( e.Row.RowType == DataControlRowType.DataRow )
+            {
+                var statisticsRows = e.Row.DataItem as StatisticRow;
+
+                if ( statisticsRows != null && statisticsRows.IsTotal )
+                {
+                    e.Row.AddCssClass( "is-bold" );
+                }
+            }
         }
 
         #endregion

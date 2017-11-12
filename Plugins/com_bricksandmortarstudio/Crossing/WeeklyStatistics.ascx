@@ -1,5 +1,11 @@
 ﻿<%@ Control Language="C#" AutoEventWireup="true" CodeFile="WeeklyStatistics.ascx.cs" Inherits="RockWeb.Plugins.com_bricksandmortarstudio.Crossing.WeeklyStatistics" %>
 
+<style>
+    .is-bold {
+        font-weight: bold;
+    }
+</style>
+
 <asp:UpdatePanel ID="upnlContent" runat="server">
     <ContentTemplate>
 
