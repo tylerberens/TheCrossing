@@ -198,22 +198,22 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
             lLastYearNote.Text = sb.ToString();
 
             gThisYear.DataSource = thisYearDataSource
-                .OrderByDescending( sr => lastYearDataSource.Select( ly => ly.RowId ).Contains( sr.RowId ) )
-                .ThenBy( sr => sr.SortValue )
+                .OrderBy( sr => sr.SortValue )
                 .ThenBy( sr => sr.Area )
                 .ThenBy( sr => sr.Subarea )
                 .ThenBy( sr => sr.IsTotal )
-                .ThenBy( sr => sr.Service )
+                .ThenBy( sr => ( ( int ) sr.DayOfWeek + 6 ) % 7 )
+                .ThenBy(sr => sr.StartTime)
                 .ToList();
             gThisYear.DataBind();
 
             gLastYear.DataSource = lastYearDataSource
-                .OrderByDescending( sr => thisYearDataSource.Select( ly => ly.RowId ).Contains( sr.RowId ) )
-                .ThenBy( sr => sr.SortValue )
+                .OrderBy( sr => sr.SortValue )
                 .ThenBy( sr => sr.Area )
                 .ThenBy( sr => sr.Subarea )
                 .ThenBy( sr => sr.IsTotal )
-                .ThenBy( sr => sr.Service )
+                .ThenBy( sr => ( ( int ) sr.DayOfWeek + 6 ) % 7 )
+                .ThenBy( sr => sr.StartTime )
                 .ToList();
             gLastYear.DataBind();
 
@@ -222,7 +222,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
         private List<StatisticRow> GetDataForDateRange( DateTime startDate, DateTime endDate )
         {
             var entityTypeGroupGuid = Rock.SystemGuid.EntityType.GROUP.AsGuid();
-            var groupEntityType = EntityTypeCache.Read(entityTypeGroupGuid);
+            var groupEntityType = EntityTypeCache.Read( entityTypeGroupGuid );
             int entityTypeScheduleEntityId = EntityTypeCache.Read( Rock.SystemGuid.EntityType.SCHEDULE.AsGuid() ).Id;
 
             var rockContext = new RockContext();
@@ -238,7 +238,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
             var metricCategoryGuidList = GetAttributeValue( "Metrics" ).SplitDelimitedValues().AsGuidList();
             var attendanceGroupGuidList = GetAttributeValue( "AttendanceGroups" ).SplitDelimitedValues().AsGuidList();
             var parentMetricVolunteerGroupGuids = GetAttributeValue( "ServiceVolunteerGroups" ).SplitDelimitedValues().AsGuidList();
-            
+
 
             var attendanceGroups = groupService.GetByGuids( attendanceGroupGuidList );
             var parentMetricVolunteerGroups = groupService.GetByGuids( parentMetricVolunteerGroupGuids );
@@ -262,37 +262,55 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
             foreach ( var metric in metrics )
             {
                 var metricData = metricValueService.Queryable( "MetricValuePartitions" ).Where( mv =>
-                      mv.MetricValueDateTime >= startDate &&
-                      mv.MetricValueDateTime <= endDate &&
-                      mv.MetricId == metric.Id &&
-                      mv.MetricValuePartitions.FirstOrDefault(mvp => mvp.MetricPartition.EntityTypeId == entityTypeScheduleEntityId).EntityId.HasValue
-                    )
-                 .GroupBy( mv => mv.MetricValuePartitions.FirstOrDefault(mvp => mvp.MetricPartition.EntityTypeId == entityTypeScheduleEntityId).EntityId.Value )
-                 .ToList()
-                 .Select( mv => new StatisticRow
-                 {
-                     ScheduleDateRanges = GetScheduleDateRanges( scheduleService.Get( mv.Key ), startDate, endDate ),
-                     RowId = metric.Id + "-" + mv.Key,
-                     SortValue = 0,
-                     IsTotal = false,
-                     Area = metric.Title,
-                     Subarea = "HeadCount",
-                     Service = scheduleService.Get( mv.Key ).Name,
-                     iCalendarContent = scheduleService.Get( mv.Key ).iCalendarContent,
-                     Count = mv.Sum( a => a.YValue ).HasValue ? decimal.ToInt32( mv.Sum( a => a.YValue ).Value ) : 0,
-                     MetricNote = mv.Max( a => a.Note ),
-                     Value = mv
-                 } )
-                 .ToList();
+                                                              mv.MetricValueDateTime >= startDate &&
+                                                              mv.MetricValueDateTime <= endDate &&
+                                                              mv.MetricId == metric.Id &&
+                                                              mv.MetricValuePartitions.FirstOrDefault(
+                                                                    mvp =>
+                                                                        mvp.MetricPartition.EntityTypeId ==
+                                                                        entityTypeScheduleEntityId ).EntityId.HasValue
+                                                   )
+                                                   .GroupBy(
+                                                       mv =>
+                                                           mv.MetricValuePartitions.FirstOrDefault(
+                                                                 mvp =>
+                                                                     mvp.MetricPartition.EntityTypeId ==
+                                                                     entityTypeScheduleEntityId ).EntityId.Value )
+                                                   .ToList()
+                                                   .Select( mv =>
+                                                    {
+                                                        var service = scheduleService.Get( mv.Key );
+                                                        return new StatisticRow
+                                                        {
+                                                            ScheduleDateRanges =
+                                                                GetScheduleDateRanges(service,
+                                                                    startDate, endDate ),
+                                                            RowId = metric.Id + "-" + mv.Key,
+                                                            SortValue = 0,
+                                                            IsTotal = false,
+                                                            Area = metric.Title,
+                                                            Subarea = "HeadCount",
+                                                            StartTime = service.WeeklyTimeOfDay ?? service.StartTimeOfDay,
+                                                            DayOfWeek = service.WeeklyDayOfWeek ?? GetLastDayOfWeek(service, startDate, endDate),
+                                                            Service = service.Name,
+                                                            Count =
+                                                                mv.Sum( a => a.YValue ).HasValue
+                                                                    ? decimal.ToInt32( mv.Sum( a => a.YValue ).Value )
+                                                                    : 0,
+                                                            MetricNote = mv.Max( a => a.Note ),
+                                                            Value = mv
+                                                        };
+                                                    } )
+                                                   .ToList();
 
                 foreach ( var row in metricData )
                 {
                     int volunteers = 0;
-                    int total = ( row.Value.Sum( a => a.YValue ).HasValue ? decimal.ToInt32( row.Value.Sum( a => a.YValue ).Value ) : 0 );
+                    int total = row.Value.Sum( a => a.YValue ).HasValue ? decimal.ToInt32( row.Value.Sum( a => a.YValue ).Value ) : 0;
 
-                    if (metricVolunteerAttendanceData.Any())
+                    if ( metricVolunteerAttendanceData.Any() )
                     {
-                        volunteers += row.ScheduleDateRanges.Sum(dateRange => metricVolunteerAttendanceData.Count(a => (a.DidAttend == null || a.DidAttend.Value) && a.StartDateTime >= dateRange.Start && a.StartDateTime <= dateRange.End));
+                        volunteers += row.ScheduleDateRanges.Sum( dateRange => metricVolunteerAttendanceData.Count( a => ( a.DidAttend == null || a.DidAttend.Value ) && a.StartDateTime >= dateRange.Start && a.StartDateTime <= dateRange.End ) );
                         row.Total = total + volunteers;
                         row.Volunteers = volunteers;
                     }
@@ -313,14 +331,14 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                         Total = metricData.Sum(mv => mv.Total)
                     } }.AsQueryable() );
 
-                     datasource.AddRange( subTotalRow );
+                    datasource.AddRange( subTotalRow );
                 }
 
             }
 
             string attributeKeyString = GetAttributeValue( "VolunteerGroupAttributeKey" );
             var volunteerGroupAttributeIdList = attributeService.Queryable()
-                .Where( a => a.Key == attributeKeyString && a.EntityTypeQualifierColumn == "GroupTypeId" && a.EntityTypeId == groupEntityType.Id).Select( a => a.Id );
+                .Where( a => a.Key == attributeKeyString && a.EntityTypeQualifierColumn == "GroupTypeId" && a.EntityTypeId == groupEntityType.Id ).Select( a => a.Id );
             if ( volunteerGroupAttributeIdList.Any() )
             {
                 // Find the groups that attribute values that have the maaping between group (the entityId) and the place they should be grouped with attending (value)
@@ -338,14 +356,14 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                     {
                         var attendanceChildDescendantGroups = groupService.GetAllDescendents( attendanceChildGroup.Id ).ToList();
                         // Include child group in for cases where attendance needs to be mapped to an area not a specific group (production team isn't for a specific children's group -- it's associated with TC kids as a whole)
-                        attendanceChildDescendantGroups.Add(attendanceChildGroup);
-                        var attendanceChildDescendantGroupIds = attendanceChildDescendantGroups.Select(g => g.Id);
+                        attendanceChildDescendantGroups.Add( attendanceChildGroup );
+                        var attendanceChildDescendantGroupIds = attendanceChildDescendantGroups.Select( g => g.Id );
 
                         var volunteerGroupIds = volunteerGroupMappingList
                             .Where( vgm => attendanceChildDescendantGroups.Any( g => g.Guid == vgm.VolunteerAttendanceGroupGuid ) )
                             .Select( vgm => vgm.VolunteerGroupId ).ToList();
                         var volunteerGroupAttendance = attendanceService.Queryable()
-                            .Where( a => volunteerGroupIds.Any(id => id != null && id == a.Group.Id) && a.StartDateTime >= startDate && a.StartDateTime <= endDate)
+                            .Where( a => volunteerGroupIds.Any( id => id != null && id == a.Group.Id ) && a.StartDateTime >= startDate && a.StartDateTime <= endDate )
                             .ToList();
 
                         var acg = attendanceChildGroup;
@@ -355,18 +373,18 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                             a.StartDateTime <= endDate &&
                             ( a.GroupId == acg.Id ||
                                 attendanceChildDescendantGroupIds.Any( id => id == a.GroupId ) )
-                                && (a.DidAttend == null || a.DidAttend.Value))
+                                && ( a.DidAttend == null || a.DidAttend.Value ) )
                             .GroupBy( a => a.ScheduleId )
                             .ToList();
-                        
+
                         // ag is created to prevent a warn "Access to foreach variable in closure."
                         var ag = attendanceGroup;
                         var statisticRows = childGroupAttendance.Select( a =>
                         {
 
                             var attendance = a.FirstOrDefault();
-                            var scheduleDateRanges = GetScheduleDateRanges(attendance.Schedule, startDate,
-                                endDate);
+                            var scheduleDateRanges = GetScheduleDateRanges( attendance.Schedule, startDate,
+                                endDate );
                             var row = new StatisticRow();
                             row.RowId = acg.Id + "-" + a.Key;
                             row.SortValue = 1;
@@ -374,12 +392,13 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                             row.Area = ag.Name;
                             row.Subarea = acg.Name;
                             row.Service = attendance.Schedule.Name;
-                            row.iCalendarContent = attendance.Schedule.iCalendarContent;
+                            row.StartTime = attendance.Schedule.WeeklyTimeOfDay ?? attendance.Schedule.StartTimeOfDay;
+                            row.DayOfWeek = attendance.Schedule.WeeklyDayOfWeek ?? GetLastDayOfWeek( attendance.Schedule, startDate, endDate);
                             row.Count = a.Count();
-                            row.Volunteers = volunteerGroupAttendance.Count(b => scheduleDateRanges.Any( s => b.StartDateTime >= s.Start && b.StartDateTime <= s.End ));
-                            row.Total = a.Count() + volunteerGroupAttendance.Count(b => scheduleDateRanges.Any( s => b.StartDateTime >= s.Start && b.StartDateTime <= s.End ));
+                            row.Volunteers = volunteerGroupAttendance.Count( b => scheduleDateRanges.Any( s => b.StartDateTime >= s.Start && b.StartDateTime <= s.End ) );
+                            row.Total = a.Count() + volunteerGroupAttendance.Count( b => scheduleDateRanges.Any( s => b.StartDateTime >= s.Start && b.StartDateTime <= s.End ) );
                             return row;
-                        }).ToList();
+                        } ).ToList();
 
                         if ( statisticRows.Any() )
                         {
@@ -402,26 +421,26 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                     }
                 }
             }
-            
+
             datasource.Add( new StatisticRow
-                {
-                    RowId = "Total",
-                    SortValue = 2,
-                    IsTotal = true,
-                    Area = "Grand Total",
-                    Subarea = "Total",
-                    Service = "Total",
-                    Count = datasource.Where(ds=> ds.IsTotal).Sum(cg => cg.Count),
-                    Volunteers = datasource.Where(ds=> ds.IsTotal).Sum(cg => cg.Volunteers),
-                    Total = datasource.Where(ds=> ds.IsTotal).Sum(cg => cg.Total)
-                } );
+            {
+                RowId = "Total",
+                SortValue = 2,
+                IsTotal = true,
+                Area = "Grand Total",
+                Subarea = "Total",
+                Service = "Total",
+                Count = datasource.Where( ds => ds.IsTotal ).Sum( cg => cg.Count ),
+                Volunteers = datasource.Where( ds => ds.IsTotal ).Sum( cg => cg.Volunteers ),
+                Total = datasource.Where( ds => ds.IsTotal ).Sum( cg => cg.Total )
+            } );
 
             return datasource;
         }
 
         public virtual List<DateRange> GetScheduleDateRanges( Schedule schedule, DateTime beginDateTime, DateTime endDateTime )
         {
-            if (schedule == null)
+            if ( schedule == null )
             {
                 return new List<DateRange>();
             }
@@ -431,21 +450,43 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
             DDay.iCal.Event calEvent = schedule.GetCalenderEvent();
             if ( calEvent != null && calEvent.DTStart != null )
             {
-                var occurrences = ScheduleICalHelper.GetOccurrences(calEvent, beginDateTime, endDateTime);
+                var occurrences = ScheduleICalHelper.GetOccurrences( calEvent, beginDateTime, endDateTime );
                 result = occurrences
-                    .Where(a =>
-                        a.Period != null &&
-                        a.Period.StartTime != null &&
-                        a.Period.EndTime != null)
-                    .Select(a => new DateRange
+                    .Where( a =>
+                         a.Period != null &&
+                         a.Period.StartTime != null &&
+                         a.Period.EndTime != null )
+                    .Select( a => new DateRange
                     {
-                        Start = DateTime.SpecifyKind(a.Period.StartTime.Value, DateTimeKind.Local).AddMinutes(-schedule.CheckInStartOffsetMinutes ?? 0),
-                        End = DateTime.SpecifyKind(a.Period.EndTime.Value, DateTimeKind.Local)
-                    })
+                        Start = DateTime.SpecifyKind( a.Period.StartTime.Value, DateTimeKind.Local ).AddMinutes( -schedule.CheckInStartOffsetMinutes ?? 0 ),
+                        End = DateTime.SpecifyKind( a.Period.EndTime.Value, DateTimeKind.Local )
+                    } )
                     .ToList();
                 // ensure the the datetime is DateTimeKind.Local since iCal returns DateTimeKind.UTC
             }
             return result;
+        }
+
+        public virtual DayOfWeek GetLastDayOfWeek( Schedule schedule, DateTime beginDateTime, DateTime endDateTime )
+        {
+            if ( schedule == null )
+            {
+                return DayOfWeek.Sunday;
+            }
+
+            DDay.iCal.Event calEvent = schedule.GetCalenderEvent();
+            if ( calEvent != null && calEvent.DTStart != null )
+            {
+                var occurrences = ScheduleICalHelper.GetOccurrences( calEvent, beginDateTime, endDateTime );
+                return occurrences
+                    .FirstOrDefault(a =>
+                        a.Period != null &&
+                        a.Period.StartTime != null &&
+                        a.Period.EndTime != null)
+                    .Period.StartTime.DayOfWeek;
+                // ensure the the datetime is DateTimeKind.Local since iCal returns DateTimeKind.UTC
+            }
+            return DayOfWeek.Sunday;
         }
 
         #endregion
@@ -466,7 +507,9 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
 
             public String Service { get; set; }
 
-            public String iCalendarContent { get; set; }
+            public DayOfWeek DayOfWeek { get; set; }
+            public TimeSpan StartTime { get; set; }
+            
 
             public int Count { get; set; }
 

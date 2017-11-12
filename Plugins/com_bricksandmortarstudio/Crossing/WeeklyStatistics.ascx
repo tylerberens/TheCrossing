@@ -4,7 +4,7 @@
     <ContentTemplate>
 
         <asp:Panel ID="pnlView" runat="server" CssClass="panel panel-block">
-
+            <asp:Literal runat="server" ID="dLiteral"></asp:Literal>
             <div class="panel-heading">
                 <h1 class="panel-title">Weekly Statistics</h1>
             </div>
