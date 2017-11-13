@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Data;
 using System.Linq;
 using Rock;
 using Rock.Data;
@@ -8,6 +9,7 @@ using Rock.Model;
 using Rock.Web.Cache;
 using Rock.Attribute;
 using System.Text;
+using System.Web;
 using System.Web.UI.WebControls;
 using com.bricksandmortarstudio.checkinextensions.Utils;
 
@@ -68,7 +70,16 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
 
             if ( !Page.IsPostBack )
             {
-                dpWeek.SelectedDate = DateTime.Now.Date;
+                var week = DateTime.Now.Date;
+                if (Page.ClientQueryString.Contains("Week"))
+                {
+                    week = DateTime.Parse(Page.ClientQueryString);
+                }
+                dpWeek.SelectedDate = week;
+
+
+                hfUrl.Value = GetCurrentUrl();
+
                 BindGrids();
             }
         }
@@ -111,6 +122,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
 
         protected void dpWeek_TextChanged( object sender, EventArgs e )
         {
+            hfUrl.Value = GetCurrentUrl();
             BindGrids();
         }
 
@@ -144,6 +156,12 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
 
         #region Methods
 
+        private String GetCurrentUrl()
+        {
+            var queryString = HttpUtility.ParseQueryString( Request.QueryString.ToString() );
+            queryString.Set( "Week", dpWeek.SelectedDate.Value.ToShortDateString() );
+            return Request.Url.AbsoluteUri + "?" + queryString;
+        }
 
         /// <summary>
         /// Binds the grid.
@@ -319,7 +337,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                                                             SortValue = 0,
                                                             IsTotal = false,
                                                             Area = metric.Title,
-                                                            Subarea = "HeadCount",
+                                                            Subarea = "Head Count",
                                                             StartTime = service.WeeklyTimeOfDay ?? service.StartTimeOfDay,
                                                             DayOfWeek = service.WeeklyDayOfWeek ?? GetLastDayOfWeek( service, startDate, endDate ),
                                                             Service = service.Name,
@@ -357,7 +375,7 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                         SortValue = 0,
                         IsTotal = true,
                         Area = metric.Title,
-                        Subarea = "HeadCount",
+                        Subarea = "Head Count",
                         Service = "Sub-Total",
                         Count = metricData.Sum( mv => mv.Count ),
                         Volunteers = metricData.Sum( mv => mv.Volunteers ),
@@ -374,8 +392,8 @@ namespace RockWeb.Plugins.com_bricksandmortarstudio.Crossing
                 RowId = "HeadcountTotal",
                 SortValue = 1,
                 IsTotal = true,
-                Area = "HeadCount Total",
-                Subarea = "HeadCount",
+                Area = "Head Count Total",
+                Subarea = "Head Count",
                 Service = "Total",
                 Count = datasource.Where( row => !row.IsTotal ).Sum( row => row.Count ),
                 Volunteers = datasource.Where( row => !row.IsTotal ).Sum( mv => mv.Volunteers ),

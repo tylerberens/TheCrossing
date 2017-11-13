@@ -6,15 +6,27 @@
     }
 </style>
 
+<!-- TODO Remove in v7 -->
+<script src="https://cdn.jsdelivr.net/npm/clipboard@1/dist/clipboard.min.js"></script>
+
 <asp:UpdatePanel ID="upnlContent" runat="server">
     <ContentTemplate>
+        
+       <asp:HiddenField runat="server" ID="hfUrl" ClientIDMode="Static" />
 
         <asp:Panel ID="pnlView" runat="server" CssClass="panel panel-block">
             <asp:Literal runat="server" ID="dLiteral"></asp:Literal>
             <div class="panel-heading">
-                <h1 class="panel-title">Weekly Statistics</h1>
+                <h1 class="panel-title">Weekly Statistics</h1> 
+
+                <button id="btnCopyToClipboard" style="margin-left: 1em;"
+                        data-toggle="tooltip" data-placement="top" data-trigger="hover" data-delay="250" title="Copy Report Link to Clipboard"
+                        class="btn btn-link padding-all-none btn-copy-to-clipboard"
+                        onclick="$(this).attr('data-original-title', 'Copied').tooltip('show').attr('data-original-title', 'Copy Link to Clipboard');return false;">
+                     <i class='fa fa-clipboard'></i>
+                </button>
             </div>
-            <div class="panel-body">
+            <div class="panel-body" style="margin-bottom: 2em">
                 <Rock:DatePicker ID="dpWeek" runat="server" Label="Week" OnTextChanged="dpWeek_TextChanged" AutoPostBack="true" />
 
                 <div class="row">
@@ -81,3 +93,11 @@
 
     </ContentTemplate>
 </asp:UpdatePanel>
+
+<script>
+    new Clipboard('#btnCopyToClipboard', {
+        text: function (trigger) {
+            return  $('#hfUrl').val();
+        }
+    });
+</script>
