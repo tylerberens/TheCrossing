@@ -8,6 +8,7 @@ using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
 using Rock.Web.UI.Controls;
+using Rock.Web.Cache
 
 namespace com.bricksandmortarstudio.TheCrossing.Jobs
 {
@@ -27,6 +28,9 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
             string query = dataMap.GetString( "SQLQuery" );
             var workflowTypeGuid = dataMap.GetString("Workflow").AsGuidOrNull();
             var sqlToWorkflowAttributeMapping = dataMap.GetString("sqlToWorkflow").AsDictionaryOrNull();
+            
+            //set counters
+            int workflowsActivated = 0;
 
             // Ensure job settings aren't null
             if (string.IsNullOrEmpty(query) || workflowTypeGuid == null || sqlToWorkflowAttributeMapping == null)
@@ -35,7 +39,7 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
             }
 
             var rockContext = new RockContext();
-            var workflowType = new WorkflowTypeService(rockContext).Get(workflowTypeGuid.Value);
+            var workflowType = WorkflowTypeCache.Get( workflowTypeGuid.Value );
             if (workflowType == null)
             {
                 throw new Exception("Unable to find matching Workflow Type");
@@ -86,6 +90,9 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
                 ExceptionLogService.LogException( ex, httpContext );
                 throw;
             }
+            
+            // send results
+            context.Result = string.Format("{0} workflows were activated",workflowsActivated);
         }
     }
 }
