@@ -8,6 +8,7 @@ using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
 using Rock.Web.UI.Controls;
+using Rock.Web.Cache;
 
 namespace com.bricksandmortarstudio.TheCrossing.Jobs
 {
@@ -35,13 +36,13 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
             }
 
             var rockContext = new RockContext();
-            var workflowType = new WorkflowTypeService(rockContext).Get(workflowTypeGuid.Value);
+            var workflowType = WorkflowTypeCache.Get( workflowTypeGuid.Value );
             if (workflowType == null)
             {
                 throw new Exception("Unable to find matching Workflow Type");
             }
 
-            if ( !workflowType.IsActive ?? true  )
+            if (workflowType.IsActive == false)
             {
                 throw new Exception( String.Format( "{0} is not an active workflow type", workflowType.Name ) );
             }
