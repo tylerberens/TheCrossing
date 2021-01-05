@@ -29,6 +29,9 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
             var workflowTypeGuid = dataMap.GetString("Workflow").AsGuidOrNull();
             var sqlToWorkflowAttributeMapping = dataMap.GetString("sqlToWorkflow").AsDictionaryOrNull();
 
+            //set counters
+            int workflowsActivated = 0;
+
             // Ensure job settings aren't null
             if (string.IsNullOrEmpty(query) || workflowTypeGuid == null || sqlToWorkflowAttributeMapping == null)
             {
@@ -42,7 +45,7 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
                 throw new Exception("Unable to find matching Workflow Type");
             }
 
-            if (workflowType.IsActive == false)
+            if (!workflowType.IsActive ?? true)
             {
                 throw new Exception( String.Format( "{0} is not an active workflow type", workflowType.Name ) );
             }
@@ -87,6 +90,9 @@ namespace com.bricksandmortarstudio.TheCrossing.Jobs
                 ExceptionLogService.LogException( ex, httpContext );
                 throw;
             }
+            
+            // send results
+            context.Result = string.Format("{0} workflows were activated",workflowsActivated);
         }
     }
 }
